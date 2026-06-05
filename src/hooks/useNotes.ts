@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { Note, NoteFormData } from "@types";
 import { generateId, formatDate } from "@utils/export";
 import { saveSingleNote, deleteSingleNote, loadNotes } from "@utils/storage";
+import { idbDeleteFile } from "@utils/indexedDBStorage";
 
 export function useNotes(selectedFolderId: string | null = null) {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -10,6 +11,11 @@ export function useNotes(selectedFolderId: string | null = null) {
   const [saveError, setSaveError] = useState(false);
   const prevNotesRef = useRef<Note[]>([]);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const currentNoteIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentNoteIdRef.current = currentNoteId;
+  }, [currentNoteId]);
 
   useEffect(() => {
     loadNotes()
@@ -115,18 +121,21 @@ export function useNotes(selectedFolderId: string | null = null) {
     []
   );
 
-  const deleteNote = useCallback(
-    (id: string): void => {
-      setNotes(prev => {
-        const newNotes = prev.filter(note => note.id !== id);
-        if (currentNoteId === id) {
-          setCurrentNoteId(newNotes.length > 0 ? newNotes[0].id : null);
+  const deleteNote = useCallback((id: string): void => {
+    setNotes(prev => {
+      const note = prev.find(n => n.id === id);
+      if (note?.attachments) {
+        for (const att of note.attachments) {
+          idbDeleteFile(att.id).catch(() => {});
         }
-        return newNotes;
-      });
-    },
-    [currentNoteId]
-  );
+      }
+      const newNotes = prev.filter(n => n.id !== id);
+      if (currentNoteIdRef.current === id) {
+        setCurrentNoteId(newNotes.length > 0 ? newNotes[0].id : null);
+      }
+      return newNotes;
+    });
+  }, []);
 
   const getFormattedDate = useCallback(
     (id: string): string => {
