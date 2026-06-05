@@ -7,7 +7,9 @@ export function useNotes(selectedFolderId: string | null = null) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState(false);
   const prevNotesRef = useRef<Note[]>([]);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     loadNotes()
@@ -65,15 +67,17 @@ export function useNotes(selectedFolderId: string | null = null) {
     for (const n of notes) currentMap.set(n.id, n);
     const deleted = prevNotesRef.current.filter(n => !currentMap.has(n.id));
 
-    const ops: Promise<void>[] = [];
-    for (const note of added) ops.push(saveSingleNote(note));
-    for (const note of updated) ops.push(saveSingleNote(note));
-    for (const note of deleted) ops.push(deleteSingleNote(note.id));
-
-    if (ops.length > 0) {
-      Promise.all(ops).catch(error => {
-        console.error("Failed to save notes:", error);
-      });
+    if (added.length > 0 || updated.length > 0 || deleted.length > 0) {
+      saveQueueRef.current = saveQueueRef.current
+        .then(async () => {
+          for (const note of added) await saveSingleNote(note);
+          for (const note of updated) await saveSingleNote(note);
+          for (const note of deleted) await deleteSingleNote(note.id);
+        })
+        .catch(error => {
+          console.error("Failed to save notes:", error);
+          setSaveError(true);
+        });
     }
 
     prevNotesRef.current = notes;
@@ -94,19 +98,22 @@ export function useNotes(selectedFolderId: string | null = null) {
     return newNote;
   }, []);
 
-  const updateNote = useCallback((id: string, data: Partial<NoteFormData>): void => {
-    setNotes(prev =>
-      prev.map(note =>
-        note.id === id
-          ? {
-              ...note,
-              ...data,
-              updatedAt: Date.now(),
-            }
-          : note
-      )
-    );
-  }, []);
+  const updateNote = useCallback(
+    (id: string, data: Partial<NoteFormData & { attachments?: Note["attachments"] }>): void => {
+      setNotes(prev =>
+        prev.map(note =>
+          note.id === id
+            ? {
+                ...note,
+                ...data,
+                updatedAt: Date.now(),
+              }
+            : note
+        )
+      );
+    },
+    []
+  );
 
   const deleteNote = useCallback(
     (id: string): void => {
@@ -153,5 +160,7 @@ export function useNotes(selectedFolderId: string | null = null) {
     reorderNotes,
     getFormattedDate,
     loaded,
+    saveError,
+    clearSaveError: useCallback(() => setSaveError(false), []),
   };
 }

@@ -59,41 +59,53 @@ npm run dev
 
 ## 可用命令
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` / `npm run dev` | 启动开发服务器（默认端口 3000）|
-| `pnpm build` / `npm run build` | 构建生产版本到 `dist/` 目录 |
-| `pnpm preview` / `npm run preview` | 预览构建结果 |
-| `pnpm lint` / `npm run lint` | 运行 ESLint 代码检查 |
-| `pnpm lint:fix` / `npm run lint:fix` | 自动修复 ESLint 问题 |
-| `pnpm format` / `npm run format` | 使用 Prettier 格式化代码 |
-| `pnpm format:check` | 检查代码格式是否符合要求 |
-| `pnpm type-check` / `npm run type-check` | TypeScript 类型检查 |
+| 命令                                     | 说明                            |
+| ---------------------------------------- | ------------------------------- |
+| `pnpm dev` / `npm run dev`               | 启动开发服务器（默认端口 3000） |
+| `pnpm build` / `npm run build`           | 构建生产版本到 `dist/` 目录     |
+| `pnpm preview` / `npm run preview`       | 预览构建结果                    |
+| `pnpm lint` / `npm run lint`             | 运行 ESLint 代码检查            |
+| `pnpm lint:fix` / `npm run lint:fix`     | 自动修复 ESLint 问题            |
+| `pnpm format` / `npm run format`         | 使用 Prettier 格式化代码        |
+| `pnpm format:check`                      | 检查代码格式是否符合要求        |
+| `pnpm type-check` / `npm run type-check` | TypeScript 类型检查             |
 
 ## 功能特性
 
 - ✅ 实时 Markdown 预览
-- ✅ 代码语法高亮
-- ✅ 自动保存到 LocalStorage
+- ✅ 代码语法高亮（16 种语言）
+- ✅ KaTeX 数学公式渲染
+- ✅ Mermaid 图表渲染
+- ✅ 自动保存到 IndexedDB
 - ✅ 深色/浅色主题切换
-- ✅ 三种视图模式（编辑器/预览/分屏）
-- ✅ 导出为 Markdown、HTML 或 Text
+- ✅ 四种视图模式（首页/编辑器/预览/分屏）
+- ✅ 文件夹分类 + 拖拽排序
+- ✅ 查找替换（Ctrl+F / Ctrl+H）
+- ✅ 焦点模式 / 打字机模式
+- ✅ 导出为 Markdown、HTML、Text、PDF
 - ✅ 键盘快捷键支持
-- ✅ 笔记搜索
-- ✅ 平滑的侧边栏动画
+- ✅ 笔记搜索（防抖）
+- ✅ 大纲视图
+- ✅ 移动端响应式适配
 
 ## 键盘快捷键
 
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl/Cmd + S` | 保存笔记 |
-| `Ctrl/Cmd + N` | 新建笔记 |
-| `Ctrl/Cmd + F` | 搜索笔记 |
-| `Tab` | 编辑器中缩进 |
+| 快捷键         | 功能                    |
+| -------------- | ----------------------- |
+| `Ctrl/Cmd + S` | 保存笔记                |
+| `Ctrl/Cmd + N` | 新建笔记                |
+| `Ctrl/Cmd + F` | 搜索笔记 / 编辑器内查找 |
+| `Ctrl/Cmd + H` | 查找替换                |
+| `Ctrl/Cmd + E` | 切换视图模式            |
+| `Ctrl/Cmd + B` | 粗体                    |
+| `Ctrl/Cmd + I` | 斜体                    |
+| `Tab`          | 编辑器中缩进            |
+| `F8`           | 焦点模式                |
+| `F9`           | 打字机模式              |
 
 ## 注意事项
 
-1. 数据存储在浏览器的 LocalStorage 中
+1. 数据存储在浏览器的 IndexedDB 中
 2. 清除浏览器数据会丢失所有笔记
 3. 建议定期使用导出功能备份笔记
 
@@ -135,9 +147,11 @@ npm run dev
 排查步骤：
 
 1. 先验证 build 产物是否正常：
+
    ```bash
    npm run build && npx vite preview --port 3002
    ```
+
    浏览器打开 `http://localhost:3002/`，如果正常则说明是 Vite 缓存问题
 
 2. 打开浏览器开发者工具（F12），检查 Console 是否有红色错误信息
@@ -180,6 +194,7 @@ markdown-notes/
 - **框架**: React 19 + TypeScript
 - **构建工具**: Vite 4
 - **样式**: Tailwind CSS
-- **Markdown**: react-markdown + remark-gfm
+- **Markdown**: react-markdown + remark-gfm + remark-math + rehype-katex
 - **代码高亮**: react-syntax-highlighter
-- **日期处理**: date-fns
+- **图表**: Mermaid
+- **存储**: IndexedDB

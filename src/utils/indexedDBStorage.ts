@@ -156,3 +156,25 @@ export async function loadAllData(): Promise<StorageData> {
     theme: theme || "light",
   };
 }
+
+export async function idbSaveFile(
+  id: string,
+  noteId: string,
+  data: ArrayBuffer,
+  fileName: string,
+  fileType: string
+): Promise<void> {
+  await tx(STORE_FILES, "readwrite", s =>
+    s.put({ id, noteId, data, fileName, fileType, size: data.byteLength, createdAt: Date.now() })
+  );
+}
+
+export async function idbGetFile(
+  id: string
+): Promise<{ data: ArrayBuffer; fileName: string; fileType: string } | undefined> {
+  return tx(STORE_FILES, "readonly", s => s.get(id));
+}
+
+export async function idbDeleteFile(id: string): Promise<void> {
+  await tx<undefined>(STORE_FILES, "readwrite", s => s.delete(id));
+}

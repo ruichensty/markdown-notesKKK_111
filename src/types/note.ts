@@ -4,6 +4,7 @@ export interface Attachment {
   fileType: string;
   fileSize: number;
   uploadedAt: number;
+  data?: ArrayBuffer;
 }
 
 export interface Note {

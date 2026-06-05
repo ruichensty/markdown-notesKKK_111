@@ -1,5 +1,4 @@
 export * from "./useNotes";
-export * from "./useLocalStorage";
 export * from "./useDebounce";
 export * from "./useKeyboardShortcuts";
 export * from "./useErrorHandler";

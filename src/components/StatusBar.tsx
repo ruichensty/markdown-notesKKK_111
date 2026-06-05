@@ -65,20 +65,21 @@ export function StatusBar({ allNotes, currentNote }: StatusBarProps) {
         <span className="font-medium">
           {totalCount} note{totalCount !== 1 ? "s" : ""}
         </span>
-        <span className="text-muted-foreground/50">•</span>
-        <span className="text-muted-foreground/70">Auto-save</span>
+        <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>
+        <span className="text-muted-foreground/70 status-bar-hide-mobile">Auto-save</span>
         {stats && (
           <>
-            <span className="text-muted-foreground/50">•</span>
-            <span>{stats.words.toLocaleString()} 字</span>
-            <span className="text-muted-foreground/50">•</span>
-            <span>{stats.paragraphs} 段落</span>
-            <span className="text-muted-foreground/50">•</span>
-            <span>约 {stats.readTime}阅读</span>
+            <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>
+            <span className="status-bar-hide-mobile">{stats.words.toLocaleString()} 字</span>
+            <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>
+            <span className="status-bar-hide-mobile">{stats.paragraphs} 段落</span>
+            <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>
+            <span className="status-bar-hide-mobile">约 {stats.readTime}阅读</span>
           </>
         )}
+        {stats && <span className="md:hidden">{stats.words.toLocaleString()} 字</span>}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 status-bar-hide-mobile">
         <span title={storageLabel}>{storageLabel}</span>
         <span className="text-muted-foreground/50">•</span>
         <span className="text-muted-foreground/50">v1.0.0</span>

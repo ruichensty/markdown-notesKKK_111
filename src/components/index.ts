@@ -11,3 +11,5 @@ export { FolderTree } from "./FolderTree";
 export { SearchResults } from "./SearchResults";
 export { SidebarTabs } from "./SidebarTabs";
 export { SortableNoteList } from "./SortableNoteList";
+export { ConfirmDialog } from "./ConfirmDialog";
+export { AttachmentImage } from "./AttachmentImage";

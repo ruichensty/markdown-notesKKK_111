@@ -9,6 +9,8 @@ import rehypeSanitize from "rehype-sanitize";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
 import { vscDarkPlus, vs } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "@context";
+import { useDebounce } from "@hooks";
+import { AttachmentImage } from "./AttachmentImage";
 import type { Note } from "@types";
 import "katex/dist/katex.min.css";
 
@@ -67,6 +69,7 @@ interface PreviewProps {
 
 function Preview({ note, showLineNumbers = false }: PreviewProps) {
   const { theme } = useTheme();
+  const debouncedContent = useDebounce(note.content || "", 300);
 
   const CodeComponent = useCallback(
     ({
@@ -128,15 +131,26 @@ function Preview({ note, showLineNumbers = false }: PreviewProps) {
   );
 
   const memoizedContent = useMemo(
-    () => note.content || "Start typing to see preview...",
-    [note.content]
+    () => debouncedContent || "Start typing to see preview...",
+    [debouncedContent]
+  );
+
+  const ImgComponent = useCallback(
+    ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      if (src?.startsWith("attachment://")) {
+        return <AttachmentImage src={src} alt={alt || ""} />;
+      }
+      return <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg" {...props} />;
+    },
+    []
   );
 
   const memoizedComponents = useMemo<Components>(
     () => ({
       code: CodeComponent,
+      img: ImgComponent,
     }),
-    [CodeComponent]
+    [CodeComponent, ImgComponent]
   );
 
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);

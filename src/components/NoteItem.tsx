@@ -1,14 +1,25 @@
-import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import type { Note } from '@types';
+import React, { memo, useState, useRef, useEffect, useCallback } from "react";
+import type { Note } from "@types";
 
 interface NoteItemProps {
   note: Note;
   isActive: boolean;
   onClick: () => void;
   onDelete: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
+function NoteItem({
+  note,
+  isActive,
+  onClick,
+  onDelete,
+  selectionMode,
+  selected,
+  onToggleSelect,
+}: NoteItemProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const confirmRef = useRef<HTMLDivElement>(null);
 
@@ -19,8 +30,8 @@ function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
         setShowConfirm(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showConfirm]);
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
@@ -28,29 +39,57 @@ function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
     setShowConfirm(true);
   }, []);
 
-  const handleConfirm = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete();
-    setShowConfirm(false);
-  }, [onDelete]);
+  const handleConfirm = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDelete();
+      setShowConfirm(false);
+    },
+    [onDelete]
+  );
 
   const handleCancel = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setShowConfirm(false);
   }, []);
 
-  const title = note.title || 'Untitled';
-  const time = note.createdAt ? formatTime(note.createdAt) : '';
+  const title = note.title || "Untitled";
+  const time = note.createdAt ? formatTime(note.createdAt) : "";
 
   return (
     <div
       onClick={onClick}
-      className={`sidebar-item group relative ${isActive ? 'sidebar-item--active' : ''}`}
+      className={`sidebar-item group relative ${isActive ? "sidebar-item--active" : ""}`}
     >
-      <div className={`sidebar-item-indicator ${isActive ? 'sidebar-item-indicator--active' : ''}`} />
+      <div
+        className={`sidebar-item-indicator ${isActive ? "sidebar-item-indicator--active" : ""}`}
+      />
+
+      {selectionMode && (
+        <button
+          onClick={e => {
+            e.stopPropagation();
+            onToggleSelect?.();
+          }}
+          className={`sidebar-item-checkbox ${selected ? "sidebar-item-checkbox--checked" : ""}`}
+        >
+          {selected && (
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3.5 8.5l3 3 6-6" />
+            </svg>
+          )}
+        </button>
+      )}
 
       <svg
-        className={`sidebar-item-icon ${isActive ? 'text-primary' : 'text-muted-foreground/60'}`}
+        className={`sidebar-item-icon ${isActive ? "text-primary" : "text-muted-foreground/60"}`}
         viewBox="0 0 16 16"
         fill="none"
         stroke="currentColor"
@@ -64,20 +103,26 @@ function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
         <line x1="6" y1="11" x2="9" y2="11" />
       </svg>
 
-      <span className={`sidebar-item-text ${isActive ? 'text-primary' : 'text-foreground/85'}`}>
+      <span className={`sidebar-item-text ${isActive ? "text-primary" : "text-foreground/85"}`}>
         {title}
       </span>
 
-      {time && (
-        <span className="sidebar-item-time">{time}</span>
-      )}
+      {time && <span className="sidebar-item-time">{time}</span>}
 
       <button
         onClick={handleDeleteClick}
         className="sidebar-item-action opacity-0 group-hover:opacity-100"
         title="Delete Note"
       >
-        <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          className="w-3 h-3"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M4 4l8 8M12 4l-8 8" />
         </svg>
       </button>
@@ -86,7 +131,7 @@ function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
         <div
           ref={confirmRef}
           className="absolute left-1 top-full z-50 bg-popover border border-border rounded-lg shadow-xl p-2 min-w-[140px] animate-scale-in"
-          onClick={(e) => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
         >
           <p className="text-[10px] text-muted-foreground mb-1.5 px-0.5">删除这条笔记？</p>
           <div className="flex gap-1">
@@ -110,9 +155,13 @@ function NoteItem({ note, isActive, onClick, onDelete }: NoteItemProps) {
 }
 
 export default memo(NoteItem, (prevProps, nextProps) => {
-  return prevProps.note.id === nextProps.note.id &&
-         prevProps.note.title === nextProps.note.title &&
-         prevProps.isActive === nextProps.isActive;
+  return (
+    prevProps.note.id === nextProps.note.id &&
+    prevProps.note.title === nextProps.note.title &&
+    prevProps.isActive === nextProps.isActive &&
+    prevProps.selectionMode === nextProps.selectionMode &&
+    prevProps.selected === nextProps.selected
+  );
 });
 
 export { NoteItem };
@@ -120,7 +169,7 @@ export { NoteItem };
 function formatTime(timestamp: number): string {
   const d = new Date(timestamp);
   const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number) => String(n).padStart(2, "0");
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
   const isToday = d.toDateString() === now.toDateString();

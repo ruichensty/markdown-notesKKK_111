@@ -16,6 +16,7 @@ interface EditorToolbarProps {
   onColor: (color: string) => void;
   onLineBreak: () => void;
   textColor: string;
+  isMobile?: boolean;
 }
 
 export const EditorToolbar = memo(function EditorToolbar({
@@ -34,9 +35,12 @@ export const EditorToolbar = memo(function EditorToolbar({
   onColor,
   onLineBreak,
   textColor,
+  isMobile = false,
 }: EditorToolbarProps) {
   return (
-    <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-border/50 bg-muted/30 flex-wrap">
+    <div
+      className={`flex items-center gap-0.5 px-2 py-1.5 border-b border-border/50 bg-muted/30 ${isMobile ? "flex-nowrap overflow-x-auto" : "flex-wrap"}`}
+    >
       <button onClick={() => onHeading(1)} className="format-btn" title="一级标题">
         <span className="text-[10px] font-bold">H1</span>
       </button>

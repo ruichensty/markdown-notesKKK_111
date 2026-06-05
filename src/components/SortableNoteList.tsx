@@ -11,6 +11,9 @@ interface SortableNoteListProps {
   onNoteSelect: (id: string) => void;
   onNoteDelete: (id: string) => void;
   onReorderNotes?: (activeId: string, overId: string) => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 function SortableNoteItem({
@@ -18,11 +21,17 @@ function SortableNoteItem({
   isActive,
   onClick,
   onDelete,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: {
   note: Note;
   isActive: boolean;
   onClick: () => void;
   onDelete: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: note.id });
   const style = {
@@ -32,7 +41,15 @@ function SortableNoteItem({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <NoteItem note={note} isActive={isActive} onClick={onClick} onDelete={onDelete} />
+      <NoteItem
+        note={note}
+        isActive={isActive}
+        onClick={onClick}
+        onDelete={onDelete}
+        selectionMode={selectionMode}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
+      />
     </div>
   );
 }
@@ -43,6 +60,9 @@ export function SortableNoteList({
   onNoteSelect,
   onNoteDelete,
   onReorderNotes,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
 }: SortableNoteListProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -63,6 +83,9 @@ export function SortableNoteList({
             isActive={note.id === activeNoteId}
             onClick={() => onNoteSelect(note.id)}
             onDelete={() => onNoteDelete(note.id)}
+            selectionMode={selectionMode}
+            selected={selectedIds?.has(note.id)}
+            onToggleSelect={() => onToggleSelect?.(note.id)}
           />
         ))}
       </SortableContext>

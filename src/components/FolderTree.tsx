@@ -14,15 +14,17 @@ interface FolderTreeProps {
   onCreateFolder: (parentId: string | null) => void;
   onDeleteFolder: (id: string) => void;
   onRenameFolder: (id: string, name: string) => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
-function sortNotesByTitle(notes: Note[]): Note[] {
-  return [...notes].sort((a, b) => {
-    const ta = (a.title || "Untitled").toLowerCase();
-    const tb = (b.title || "Untitled").toLowerCase();
-    if (ta !== tb) return ta.localeCompare(tb);
-    return (a.createdAt || 0) - (b.createdAt || 0);
-  });
+function sortNotes(notes: Note[]): Note[] {
+  const hasOrder = notes.some(n => n.order !== undefined && n.order !== null);
+  if (hasOrder) {
+    return [...notes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  return [...notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
 function hasActiveDescendant(
@@ -49,6 +51,9 @@ function FolderNode({
   onDeleteFolder,
   onRenameFolder,
   level,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
 }: {
   folder: FolderNodeData;
   notes: Note[];
@@ -60,13 +65,16 @@ function FolderNode({
   onDeleteFolder: (id: string) => void;
   onRenameFolder: (id: string, name: string) => void;
   level: number;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   const [manualState, setManualState] = useState<null | boolean>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(folder.name);
 
   const children = folder.children || [];
-  const folderNotes = sortNotesByTitle(
+  const folderNotes = sortNotes(
     notes.filter(note => Array.isArray(note.folderIds) && note.folderIds.includes(folder.id))
   );
   const hasActiveNote =
@@ -247,6 +255,9 @@ function FolderNode({
               onDeleteFolder={onDeleteFolder}
               onRenameFolder={onRenameFolder}
               level={level + 1}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           ))}
           {folderNotes.map(note => (
@@ -260,6 +271,9 @@ function FolderNode({
                 isActive={note.id === activeNoteId}
                 onClick={() => onNoteSelect(note.id)}
                 onDelete={() => onNoteDelete(note.id)}
+                selectionMode={selectionMode}
+                selected={selectedIds?.has(note.id)}
+                onToggleSelect={() => onToggleSelect?.(note.id)}
               />
             </div>
           ))}

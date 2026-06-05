@@ -48,13 +48,13 @@ export function HomeView({ onNewNote }: { onNewNote: () => void }) {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:36px_36px]" />
       </div>
 
-      <div className="relative z-10 max-w-xl mx-auto px-8 text-center">
+      <div className="relative z-10 max-w-xl mx-auto px-6 sm:px-8 text-center">
         <div className="mb-8">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary shadow-[0_18px_50px_hsl(var(--primary)/0.22)]">
+          <div className="mx-auto mb-5 flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-primary shadow-[0_18px_50px_hsl(var(--primary)/0.22)]">
             <svg
               className="text-primary-foreground"
-              width="64"
-              height="64"
+              width="48"
+              height="48"
               viewBox="0 0 64 64"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -94,7 +94,7 @@ export function HomeView({ onNewNote }: { onNewNote: () => void }) {
               />
             </svg>
           </div>
-          <h1 className="mt-4 text-2xl font-semibold text-foreground tracking-tight">
+          <h1 className="mt-4 text-xl sm:text-2xl font-semibold text-foreground tracking-tight">
             Markdown Notes
           </h1>
           <p className="mt-2 text-[11px] text-muted-foreground/60 tracking-[0.28em] uppercase">
@@ -106,10 +106,10 @@ export function HomeView({ onNewNote }: { onNewNote: () => void }) {
           <div
             className={`transition-opacity duration-500 ${mounted ? "opacity-100" : "opacity-0"}`}
           >
-            <p className="text-xl leading-relaxed text-foreground/80 font-light tracking-wide">
+            <p className="text-lg sm:text-xl leading-relaxed text-foreground/80 font-light tracking-wide">
               {quote.zh}
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground/60 italic">
+            <p className="mt-3 text-xs sm:text-sm leading-relaxed text-muted-foreground/60 italic">
               {quote.en}
             </p>
           </div>

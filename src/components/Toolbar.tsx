@@ -19,6 +19,7 @@ interface ToolbarProps {
   typewriterMode: boolean;
   onToggleFocusMode: () => void;
   onToggleTypewriterMode: () => void;
+  isMobile?: boolean;
 }
 
 export function Toolbar({
@@ -35,6 +36,7 @@ export function Toolbar({
   typewriterMode,
   onToggleFocusMode,
   onToggleTypewriterMode,
+  isMobile = false,
 }: ToolbarProps) {
   const { theme, toggleTheme } = useTheme();
   const exportMenuRef = useClickOutside<HTMLDivElement>(() => {
@@ -85,140 +87,185 @@ export function Toolbar({
       </div>
 
       <div className="flex items-center gap-1">
-        <div className="toolbar-segment">
-          <button
-            onClick={() => onViewModeChange("home")}
-            className={`toolbar-segment-btn ${
-              viewMode === "home" ? "toolbar-segment-btn--active" : ""
-            }`}
-            title="Home"
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {!isMobile && (
+          <div className="toolbar-segment">
+            <button
+              onClick={() => onViewModeChange("home")}
+              className={`toolbar-segment-btn ${
+                viewMode === "home" ? "toolbar-segment-btn--active" : ""
+              }`}
+              title="Home"
             >
-              <path d="M2 7.5L8 2l6 5.5V13a1.5 1.5 0 01-1.5 1.5h-3V10h-3v4.5h-3A1.5 1.5 0 012 13z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onViewModeChange("editor")}
-            className={`toolbar-segment-btn ${
-              viewMode === "editor" ? "toolbar-segment-btn--active" : ""
-            }`}
-            title="Editor Only"
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M2 7.5L8 2l6 5.5V13a1.5 1.5 0 01-1.5 1.5h-3V10h-3v4.5h-3A1.5 1.5 0 012 13z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onViewModeChange("editor")}
+              className={`toolbar-segment-btn ${
+                viewMode === "editor" ? "toolbar-segment-btn--active" : ""
+              }`}
+              title="Editor Only"
             >
-              <rect x="2" y="2" width="12" height="12" rx="1.5" />
-              <line x1="5" y1="5" x2="8" y2="5" />
-              <line x1="5" y1="7.5" x2="11" y2="7.5" />
-              <line x1="5" y1="10" x2="9" y2="10" />
-              <line x1="10" y1="5" x2="11" y2="5" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onViewModeChange("split")}
-            className={`toolbar-segment-btn ${
-              viewMode === "split" ? "toolbar-segment-btn--active" : ""
-            }`}
-            title="Split View"
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                <line x1="5" y1="5" x2="8" y2="5" />
+                <line x1="5" y1="7.5" x2="11" y2="7.5" />
+                <line x1="5" y1="10" x2="9" y2="10" />
+                <line x1="10" y1="5" x2="11" y2="5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onViewModeChange("split")}
+              className={`toolbar-segment-btn ${
+                viewMode === "split" ? "toolbar-segment-btn--active" : ""
+              }`}
+              title="Split View"
             >
-              <rect x="2" y="2" width="12" height="12" rx="1.5" />
-              <line x1="8" y1="3" x2="8" y2="13" strokeDasharray="1.5 1" />
-              <line x1="4" y1="5.5" x2="6.5" y2="5.5" />
-              <line x1="4" y1="7.5" x2="6" y2="7.5" />
-              <line x1="9.5" y1="5.5" x2="12" y2="5.5" />
-              <line x1="9.5" y1="7.5" x2="11.5" y2="7.5" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onViewModeChange("preview")}
-            className={`toolbar-segment-btn ${
-              viewMode === "preview" ? "toolbar-segment-btn--active" : ""
-            }`}
-            title="Preview Only"
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                <line x1="8" y1="3" x2="8" y2="13" strokeDasharray="1.5 1" />
+                <line x1="4" y1="5.5" x2="6.5" y2="5.5" />
+                <line x1="4" y1="7.5" x2="6" y2="7.5" />
+                <line x1="9.5" y1="5.5" x2="12" y2="5.5" />
+                <line x1="9.5" y1="7.5" x2="11.5" y2="7.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onViewModeChange("preview")}
+              className={`toolbar-segment-btn ${
+                viewMode === "preview" ? "toolbar-segment-btn--active" : ""
+              }`}
+              title="Preview Only"
             >
-              <rect x="2" y="2" width="12" height="12" rx="1.5" />
-              <line x1="5" y1="5.5" x2="11" y2="5.5" />
-              <line x1="5" y1="7.5" x2="11" y2="7.5" />
-              <line x1="5" y1="9.5" x2="8" y2="9.5" />
-              <polyline points="9,9.5 10,10.5 12,8.5" />
-            </svg>
-          </button>
-        </div>
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                <line x1="5" y1="5.5" x2="11" y2="5.5" />
+                <line x1="5" y1="7.5" x2="11" y2="7.5" />
+                <line x1="5" y1="9.5" x2="8" y2="9.5" />
+                <polyline points="9,9.5 10,10.5 12,8.5" />
+              </svg>
+            </button>
+          </div>
+        )}
 
-        <div className="flex items-center gap-1">
+        {isMobile && currentNote && (
           <button
-            onClick={onToggleFocusMode}
-            className={`toolbar-icon-btn ${focusMode ? "bg-primary/10 text-primary" : ""}`}
-            title="焦点模式 (F8)"
+            onClick={() => onViewModeChange(viewMode === "preview" ? "editor" : "preview")}
+            className="toolbar-icon-btn"
+            title={viewMode === "preview" ? "编辑" : "预览"}
           >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="8" cy="8" r="3" />
-              <line x1="8" y1="1" x2="8" y2="4" />
-              <line x1="8" y1="12" x2="8" y2="15" />
-              <line x1="1" y1="8" x2="4" y2="8" />
-              <line x1="12" y1="8" x2="15" y2="8" />
-            </svg>
+            {viewMode === "preview" ? (
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                <line x1="5" y1="5" x2="8" y2="5" />
+                <line x1="5" y1="7.5" x2="11" y2="7.5" />
+                <line x1="5" y1="10" x2="9" y2="10" />
+              </svg>
+            ) : (
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                <line x1="5" y1="5.5" x2="11" y2="5.5" />
+                <line x1="5" y1="7.5" x2="11" y2="7.5" />
+                <line x1="5" y1="9.5" x2="8" y2="9.5" />
+                <polyline points="9,9.5 10,10.5 12,8.5" />
+              </svg>
+            )}
           </button>
-          <button
-            onClick={onToggleTypewriterMode}
-            className={`toolbar-icon-btn ${typewriterMode ? "bg-primary/10 text-primary" : ""}`}
-            title="打字机模式 (F9)"
-          >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        )}
+
+        {!isMobile && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onToggleFocusMode}
+              className={`toolbar-icon-btn ${focusMode ? "bg-primary/10 text-primary" : ""}`}
+              title="焦点模式 (F8)"
             >
-              <rect x="2" y="4" width="12" height="8" rx="1.5" />
-              <line x1="5" y1="7" x2="11" y2="7" />
-              <line x1="7" y1="10" x2="9" y2="10" />
-            </svg>
-          </button>
-        </div>
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="8" cy="8" r="3" />
+                <line x1="8" y1="1" x2="8" y2="4" />
+                <line x1="8" y1="12" x2="8" y2="15" />
+                <line x1="1" y1="8" x2="4" y2="8" />
+                <line x1="12" y1="8" x2="15" y2="8" />
+              </svg>
+            </button>
+            <button
+              onClick={onToggleTypewriterMode}
+              className={`toolbar-icon-btn ${typewriterMode ? "bg-primary/10 text-primary" : ""}`}
+              title="打字机模式 (F9)"
+            >
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="4" width="12" height="8" rx="1.5" />
+                <line x1="5" y1="7" x2="11" y2="7" />
+                <line x1="7" y1="10" x2="9" y2="10" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         <div className="w-px h-5 bg-border"></div>
 

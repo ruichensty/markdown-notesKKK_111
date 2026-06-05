@@ -5,7 +5,7 @@ import { SearchResults } from "./SearchResults";
 import { SidebarTabs } from "./SidebarTabs";
 import type { SidebarTab } from "./SidebarTabs";
 import { FolderTree } from "./FolderTree";
-import { useFolders, useOutline } from "@hooks";
+import { useFolders, useOutline, useDebounce } from "@hooks";
 import type { Note } from "@types";
 
 interface NoteListProps {
@@ -22,15 +22,17 @@ interface NoteListProps {
   collapsed?: boolean;
   currentNoteContent?: string;
   onJumpToLine?: (line: number) => void;
+  isMobile?: boolean;
+  onBatchDelete?: (ids: string[]) => void;
+  onBatchMoveToFolder?: (ids: string[], folderId: string) => void;
 }
 
-function sortNotesByTitle(notes: Note[]): Note[] {
-  return [...notes].sort((a, b) => {
-    const ta = (a.title || "Untitled").toLowerCase();
-    const tb = (b.title || "Untitled").toLowerCase();
-    if (ta !== tb) return ta.localeCompare(tb);
-    return (a.createdAt || 0) - (b.createdAt || 0);
-  });
+function sortNotes(notes: Note[]): Note[] {
+  const hasOrder = notes.some(n => n.order !== undefined && n.order !== null);
+  if (hasOrder) {
+    return [...notes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  return [...notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
 function EmptyNotes() {
@@ -66,31 +68,36 @@ function NoteList({
   collapsed = false,
   currentNoteContent,
   onJumpToLine,
+  onBatchDelete,
 }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("notes");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { folderTree, folders, createFolder, deleteFolder, updateFolder } = useFolders();
   const headings = useOutline(currentNoteContent || "");
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 200);
+
   const rootNotes = useMemo(() => {
-    return sortNotesByTitle(
+    return sortNotes(
       notes.filter(note => !Array.isArray(note.folderIds) || note.folderIds.length === 0)
     );
   }, [notes]);
 
   const searchResults = useMemo(() => {
-    const normalizedQuery = searchQuery.toLowerCase();
+    const normalizedQuery = debouncedSearchQuery.toLowerCase();
     if (!normalizedQuery) return [];
 
-    return sortNotesByTitle(
+    return sortNotes(
       notes.filter(
         note =>
           note.title.toLowerCase().includes(normalizedQuery) ||
           note.content.toLowerCase().includes(normalizedQuery)
       )
     );
-  }, [notes, searchQuery]);
+  }, [notes, debouncedSearchQuery]);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -133,6 +140,43 @@ function NoteList({
     },
     [onJumpToLine]
   );
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === notes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(notes.map(n => n.id)));
+    }
+  }, [notes, selectedIds.size]);
+
+  const handleExitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleEnterSelection = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBatchDelete = useCallback(() => {
+    if (selectedIds.size > 0 && onBatchDelete) {
+      onBatchDelete(Array.from(selectedIds));
+      handleExitSelection();
+    }
+  }, [selectedIds, onBatchDelete, handleExitSelection]);
 
   return (
     <div
@@ -210,6 +254,27 @@ function NoteList({
           </svg>
           <span>文件夹</span>
         </button>
+        {!selectionMode && notes.length > 0 && (
+          <button
+            onClick={handleEnterSelection}
+            className="sidebar-action-btn sidebar-action-btn--secondary"
+            title="批量选择"
+          >
+            <svg
+              className="w-3 h-3"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="2" width="12" height="12" rx="1.5" />
+              <path d="M5.5 8.5l2 2 4-4" />
+            </svg>
+            <span>多选</span>
+          </button>
+        )}
       </div>
 
       <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
@@ -223,6 +288,9 @@ function NoteList({
             activeNoteId={activeNoteId}
             onNoteSelect={onNoteSelect}
             onNoteDelete={onNoteDelete}
+            selectionMode={selectionMode}
+            selectedIds={selectedIds}
+            onToggleSelect={handleToggleSelect}
           />
         ) : (
           <>
@@ -232,6 +300,9 @@ function NoteList({
               onNoteSelect={onNoteSelect}
               onNoteDelete={onNoteDelete}
               onReorderNotes={onReorderNotes}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
             />
             <FolderTree
               folders={folderTree}
@@ -243,11 +314,57 @@ function NoteList({
               onCreateFolder={handleCreateFolder}
               onDeleteFolder={handleDeleteFolder}
               onRenameFolder={handleRenameFolder}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
             />
             {notes.length === 0 && <EmptyNotes />}
           </>
         )}
       </div>
+
+      {selectionMode && (
+        <div className="batch-action-bar">
+          <button onClick={handleSelectAll} className="batch-action-btn">
+            <svg
+              className="w-3 h-3"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="2" width="12" height="12" rx="1.5" />
+              {selectedIds.size === notes.length && <path d="M5.5 8.5l2 2 4-4" />}
+            </svg>
+            <span>全选</span>
+          </button>
+          <span className="batch-action-count">{selectedIds.size} 已选</span>
+          <div className="batch-action-spacer" />
+          <button
+            onClick={handleBatchDelete}
+            disabled={selectedIds.size === 0}
+            className="batch-action-btn batch-action-btn--danger"
+          >
+            <svg
+              className="w-3 h-3"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z" />
+            </svg>
+            <span>删除</span>
+          </button>
+          <button onClick={handleExitSelection} className="batch-action-btn">
+            <span>取消</span>
+          </button>
+        </div>
+      )}
 
       <div className="sidebar-footer">
         <span>Auto-save</span>
@@ -267,6 +384,8 @@ export default memo(NoteList, (prevProps, nextProps) => {
     prevProps.onNewNote === nextProps.onNewNote &&
     prevProps.onNoteDelete === nextProps.onNoteDelete &&
     prevProps.searchInputRef === nextProps.searchInputRef &&
-    prevProps.currentNoteContent === nextProps.currentNoteContent
+    prevProps.currentNoteContent === nextProps.currentNoteContent &&
+    prevProps.onBatchDelete === nextProps.onBatchDelete &&
+    prevProps.onBatchMoveToFolder === nextProps.onBatchMoveToFolder
   );
 });

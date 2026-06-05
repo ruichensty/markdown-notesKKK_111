@@ -6,6 +6,9 @@ interface SearchResultsProps {
   activeNoteId: string | null;
   onNoteSelect: (id: string) => void;
   onNoteDelete: (id: string) => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 export function SearchResults({
@@ -13,6 +16,9 @@ export function SearchResults({
   activeNoteId,
   onNoteSelect,
   onNoteDelete,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
 }: SearchResultsProps) {
   if (notes.length === 0) {
     return (
@@ -31,6 +37,9 @@ export function SearchResults({
           isActive={note.id === activeNoteId}
           onClick={() => onNoteSelect(note.id)}
           onDelete={() => onNoteDelete(note.id)}
+          selectionMode={selectionMode}
+          selected={selectedIds?.has(note.id)}
+          onToggleSelect={() => onToggleSelect?.(note.id)}
         />
       ))}
     </>

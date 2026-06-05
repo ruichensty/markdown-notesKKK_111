@@ -8,6 +8,8 @@ import React, {
 } from "react";
 import type { Note } from "@types";
 import { useDebounce } from "@hooks";
+import { generateId } from "@utils/export";
+import { idbSaveFile } from "@utils/indexedDBStorage";
 import { SearchReplace } from "./SearchReplace";
 import { EditorToolbar } from "./EditorToolbar";
 
@@ -19,6 +21,14 @@ interface EditorProps {
   focusMode?: boolean;
   typewriterMode?: boolean;
   autoPair?: boolean;
+  isMobile?: boolean;
+  onAttachmentAdd?: (attachment: {
+    id: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    uploadedAt: number;
+  }) => void;
 }
 
 export interface EditorHandle {
@@ -70,6 +80,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     focusMode = false,
     typewriterMode = false,
     autoPair = true,
+    isMobile = false,
+    onAttachmentAdd,
   },
   ref
 ) {
@@ -128,6 +140,80 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
   }, []);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
+      if (files.length === 0) return;
+
+      e.preventDefault();
+      for (const file of files) {
+        const attachmentId = generateId();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const arrayBuffer = reader.result as ArrayBuffer;
+          idbSaveFile(attachmentId, note.id, arrayBuffer, file.name, file.type).then(() => {
+            const marker = `![${file.name}](attachment://${attachmentId})`;
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const newContent = content.substring(0, start) + marker + content.substring(end);
+            setContent(newContent);
+            setTimeout(() => {
+              textarea.selectionStart = textarea.selectionEnd = start + marker.length;
+            }, 0);
+            onAttachmentAdd?.({
+              id: attachmentId,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: arrayBuffer.byteLength,
+              uploadedAt: Date.now(),
+            });
+          });
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    },
+    [content, note.id, onAttachmentAdd]
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+      if (files.length === 0) return;
+
+      e.preventDefault();
+      for (const file of files) {
+        const attachmentId = generateId();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const arrayBuffer = reader.result as ArrayBuffer;
+          idbSaveFile(attachmentId, note.id, arrayBuffer, file.name, file.type).then(() => {
+            const marker = `![${file.name}](attachment://${attachmentId})`;
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const newContent = content.substring(0, start) + marker + content.substring(end);
+            setContent(newContent);
+            setTimeout(() => {
+              textarea.selectionStart = textarea.selectionEnd = start + marker.length;
+            }, 0);
+            onAttachmentAdd?.({
+              id: attachmentId,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: arrayBuffer.byteLength,
+              uploadedAt: Date.now(),
+            });
+          });
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    },
+    [content, note.id, onAttachmentAdd]
+  );
 
   const wrapSelection = useCallback(
     (before: string, after: string, placeholder: string) => {
@@ -361,6 +447,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         onColor={handleColor}
         onLineBreak={handleLineBreak}
         textColor={textColor}
+        isMobile={isMobile}
       />
 
       {showSearch && (
@@ -382,6 +469,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           onKeyDown={handleKeyDown}
           onKeyUp={scrollToCursorCenter}
           onClick={scrollToCursorCenter}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
           placeholder="Start writing with Markdown..."
           className="editor-textarea w-full h-full bg-transparent border-none outline-none resize-none focus:ring-0 font-mono text-sm leading-relaxed scrollbar-thin"
           style={{

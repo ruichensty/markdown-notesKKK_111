@@ -75,13 +75,20 @@ export function useFolders() {
   );
 
   const folderTree = useMemo(() => {
+    const byParent = new Map<string | null, Folder[]>();
+    for (const folder of folders) {
+      const key = folder.parentId ?? null;
+      const list = byParent.get(key) ?? [];
+      list.push(folder);
+      byParent.set(key, list);
+    }
+
     const buildTree = (parentId: string | null = null): Folder[] => {
-      return folders
-        .filter(folder => folder.parentId === parentId)
-        .map(folder => ({
-          ...folder,
-          children: buildTree(folder.id),
-        }));
+      const children = byParent.get(parentId) ?? [];
+      return children.map(folder => ({
+        ...folder,
+        children: buildTree(folder.id),
+      }));
     };
 
     return buildTree();

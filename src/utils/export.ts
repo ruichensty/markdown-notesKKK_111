@@ -10,6 +10,16 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function sanitizeFilename(name: string): string {
+  return (
+    (name || "untitled")
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200) || "untitled"
+  );
+}
+
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -23,9 +33,10 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 export function exportAsMarkdown(note: Note): void {
   try {
+    const filename = sanitizeFilename(note.title);
     const content = `# ${note.title}\n\n${note.content}`;
     const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-    downloadBlob(blob, `${note.title || "untitled"}.md`);
+    downloadBlob(blob, `${filename}.md`);
   } catch (error) {
     console.error("Failed to export markdown:", error);
     throw new Error("Failed to export markdown file");
@@ -34,6 +45,7 @@ export function exportAsMarkdown(note: Note): void {
 
 export function exportAsHTML(note: Note): void {
   try {
+    const filename = sanitizeFilename(note.title);
     const htmlBody = DOMPurify.sanitize(marked.parse(note.content) as string);
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -67,7 +79,7 @@ export function exportAsHTML(note: Note): void {
 </body>
 </html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    downloadBlob(blob, `${note.title || "untitled"}.html`);
+    downloadBlob(blob, `${filename}.html`);
   } catch (error) {
     console.error("Failed to export HTML:", error);
     throw new Error("Failed to export HTML file");
@@ -76,9 +88,10 @@ export function exportAsHTML(note: Note): void {
 
 export function exportAsText(note: Note): void {
   try {
+    const filename = sanitizeFilename(note.title);
     const content = `${note.title}\n${"=".repeat(note.title.length)}\n\n${note.content}`;
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    downloadBlob(blob, `${note.title || "untitled"}.txt`);
+    downloadBlob(blob, `${filename}.txt`);
   } catch (error) {
     console.error("Failed to export text:", error);
     throw new Error("Failed to export text file");

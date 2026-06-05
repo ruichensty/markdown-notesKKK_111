@@ -26,7 +26,13 @@ export default defineConfig({
       output: {
         manualChunks: {
           "react-vendor": ["react", "react-dom"],
-          "markdown-core": ["react-markdown", "remark-gfm", "rehype-raw", "rehype-sanitize"],
+          "markdown-core": [
+            "react-markdown",
+            "remark-gfm",
+            "rehype-raw",
+            "rehype-sanitize",
+            "marked",
+          ],
           "math-vendor": ["remark-math", "rehype-katex", "katex"],
           "highlight-vendor": ["react-syntax-highlighter"],
         },
