@@ -1,4 +1,4 @@
-import { Component, type ReactNode, type ErrorInfo as ReactErrorInfo } from 'react';
+import { Component, type ReactNode, type ErrorInfo as ReactErrorInfo } from "react";
 
 interface Props {
   children: ReactNode;
@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ReactErrorInfo) {
-    console.error('[ErrorBoundary]', error, errorInfo.componentStack);
+    console.error("[ErrorBoundary]", error, errorInfo.componentStack);
   }
 
   render() {
@@ -54,7 +54,9 @@ export class ErrorBoundary extends Component<Props, State> {
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-center mb-2 text-foreground">Oops, something went wrong!</h2>
+            <h2 className="text-2xl font-bold text-center mb-2 text-foreground">
+              Oops, something went wrong!
+            </h2>
             <p className="text-center text-muted-foreground mb-4">
               An error occurred while rendering the application.
             </p>

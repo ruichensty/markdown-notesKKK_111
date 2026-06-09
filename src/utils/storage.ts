@@ -2,6 +2,7 @@ import type { Note, Theme } from "@types";
 import {
   migrateFromLocalStorage,
   loadAllData,
+  idbGetNote,
   idbSaveAllNotes,
   idbSaveNote,
   idbDeleteNote,
@@ -17,6 +18,10 @@ export async function saveNotes(notes: Note[]): Promise<void> {
 
 export async function saveSingleNote(note: Note): Promise<void> {
   await idbSaveNote(note);
+}
+
+export async function loadSingleNote(id: string): Promise<Note | undefined> {
+  return idbGetNote(id);
 }
 
 export async function deleteSingleNote(id: string): Promise<void> {

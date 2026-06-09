@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Note } from "@types";
+import type { Note, SaveStatus } from "@types";
 import { useStorageEstimate } from "@hooks";
 
 function countWords(text: string): number {
@@ -37,9 +37,23 @@ function formatBytes(bytes: number): string {
 interface StatusBarProps {
   allNotes: Note[];
   currentNote?: Note | null;
+  saveStatus?: SaveStatus;
+  onRetrySave?: () => void;
 }
 
-export function StatusBar({ allNotes, currentNote }: StatusBarProps) {
+const saveStatusLabel: Record<SaveStatus, string> = {
+  saved: "已保存",
+  saving: "保存中...",
+  retrying: "重试保存...",
+  error: "保存失败",
+};
+
+export function StatusBar({
+  allNotes,
+  currentNote,
+  saveStatus = "saved",
+  onRetrySave,
+}: StatusBarProps) {
   const totalCount = allNotes.length;
   const storage = useStorageEstimate(currentNote?.updatedAt ?? totalCount);
 
@@ -66,7 +80,23 @@ export function StatusBar({ allNotes, currentNote }: StatusBarProps) {
           {totalCount} note{totalCount !== 1 ? "s" : ""}
         </span>
         <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>
-        <span className="text-muted-foreground/70 status-bar-hide-mobile">Auto-save</span>
+        {saveStatus === "error" && onRetrySave ? (
+          <button
+            type="button"
+            className="text-destructive hover:underline"
+            onClick={onRetrySave}
+            title="点击重试保存"
+          >
+            {saveStatusLabel[saveStatus]}
+          </button>
+        ) : (
+          <span
+            className={saveStatus === "error" ? "text-destructive" : "text-muted-foreground/70"}
+            title="自动保存状态"
+          >
+            {saveStatusLabel[saveStatus]}
+          </span>
+        )}
         {stats && (
           <>
             <span className="text-muted-foreground/50 status-bar-hide-mobile">•</span>

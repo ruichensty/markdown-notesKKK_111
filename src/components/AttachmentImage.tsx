@@ -7,40 +7,57 @@ interface AttachmentImageProps {
 }
 
 export function AttachmentImage({ src, alt }: AttachmentImageProps) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [imageState, setImageState] = useState<{
+    src: string;
+    blobUrl: string | null;
+    error: boolean;
+  }>({ src, blobUrl: null, error: false });
 
   useEffect(() => {
     if (!src.startsWith("attachment://")) return;
+
     const fileId = src.replace("attachment://", "");
     let cancelled = false;
+    let objectUrl: string | null = null;
 
     idbGetFile(fileId)
       .then(file => {
-        if (cancelled || !file) {
-          if (!file) setError(true);
+        if (!file) {
+          if (!cancelled) setImageState({ src, blobUrl: null, error: true });
           return;
         }
-        const blob = new Blob([file.data], { type: file.fileType });
-        setBlobUrl(URL.createObjectURL(blob));
+
+        objectUrl = URL.createObjectURL(new Blob([file.data], { type: file.fileType }));
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = null;
+          return;
+        }
+
+        setImageState({ src, blobUrl: objectUrl, error: false });
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) setImageState({ src, blobUrl: null, error: true });
       });
 
     return () => {
       cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src, blobUrl]);
+  }, [src]);
 
-  if (error) {
+  if (!src.startsWith("attachment://")) {
+    return <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg" />;
+  }
+
+  if (imageState.src === src && imageState.error) {
     return <span className="text-destructive text-xs">[Image not found]</span>;
   }
 
-  if (!blobUrl) {
+  if (imageState.src !== src || !imageState.blobUrl) {
     return <span className="text-muted-foreground text-xs animate-pulse">Loading image...</span>;
   }
 
-  return <img src={blobUrl} alt={alt || ""} className="max-w-full h-auto rounded-lg" />;
+  return <img src={imageState.blobUrl} alt={alt || ""} className="max-w-full h-auto rounded-lg" />;
 }

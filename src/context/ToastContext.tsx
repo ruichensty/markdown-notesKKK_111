@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info';
+export type ToastType = "success" | "error" | "warning" | "info";
 
 export interface Toast {
   id: string;
@@ -23,7 +23,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    setToasts(prev => prev.filter(toast => toast.id !== id));
     const timer = timersRef.current.get(id);
     if (timer) {
       clearTimeout(timer);
@@ -31,27 +31,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const hideToast = useCallback((id: string) => {
-    setToasts((prev) =>
-      prev.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast))
-    );
-    const timer = setTimeout(() => removeToast(id), 400);
-    timersRef.current.set(id + '_leave', timer);
-  }, [removeToast]);
+  const hideToast = useCallback(
+    (id: string) => {
+      setToasts(prev => prev.map(toast => (toast.id === id ? { ...toast, leaving: true } : toast)));
+      const timer = setTimeout(() => removeToast(id), 400);
+      timersRef.current.set(id + "_leave", timer);
+    },
+    [removeToast]
+  );
 
-  const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 3000) => {
-    const id = Date.now().toString() + Math.random().toString(36).slice(2, 11);
-    const toast: Toast = { id, message, type, duration };
+  const showToast = useCallback(
+    (message: string, type: ToastType = "info", duration: number = 3000) => {
+      const id = Date.now().toString() + Math.random().toString(36).slice(2, 11);
+      const toast: Toast = { id, message, type, duration };
 
-    setToasts((prev) => [...prev, toast]);
+      setToasts(prev => [...prev, toast]);
 
-    if (duration > 0) {
-      const timer = setTimeout(() => {
-        hideToast(id);
-      }, duration);
-      timersRef.current.set(id, timer);
-    }
-  }, [hideToast]);
+      if (duration > 0) {
+        const timer = setTimeout(() => {
+          hideToast(id);
+        }, duration);
+        timersRef.current.set(id, timer);
+      }
+    },
+    [hideToast]
+  );
 
   return (
     <ToastContext.Provider value={{ toasts, showToast, hideToast }}>
@@ -66,21 +70,19 @@ function ToastContainer() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {toasts.map((toast) => (
+      {toasts.map(toast => (
         <div
           key={toast.id}
           className={`px-4 py-3 rounded-lg shadow-lg transform min-w-[300px] ${
-            toast.leaving
-              ? 'animate-slide-out'
-              : 'animate-slide-in'
+            toast.leaving ? "animate-slide-out" : "animate-slide-in"
           } ${
-            toast.type === 'success'
-              ? 'bg-green-600 text-white'
-              : toast.type === 'error'
-              ? 'bg-red-600 text-white'
-              : toast.type === 'warning'
-              ? 'bg-yellow-500 text-white'
-              : 'bg-blue-600 text-white'
+            toast.type === "success"
+              ? "bg-green-600 text-white"
+              : toast.type === "error"
+                ? "bg-red-600 text-white"
+                : toast.type === "warning"
+                  ? "bg-yellow-500 text-white"
+                  : "bg-blue-600 text-white"
           }`}
         >
           <div className="flex items-center justify-between">
@@ -89,12 +91,7 @@ function ToastContainer() {
               onClick={() => hideToast(toast.id)}
               className="ml-3 text-white/80 hover:text-white transition-colors"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -113,7 +110,7 @@ function ToastContainer() {
 export function useToast() {
   const context = useContext(ToastContext);
   if (context === undefined) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error("useToast must be used within a ToastProvider");
   }
   return context;
 }

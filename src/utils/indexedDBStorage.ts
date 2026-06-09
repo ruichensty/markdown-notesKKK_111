@@ -61,14 +61,33 @@ function tx<T>(
         const transaction = db.transaction(storeName, mode);
         const store = transaction.objectStore(storeName);
         const req = work(store);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        let result: T;
+
+        req.onsuccess = () => {
+          result = req.result;
+        };
+        req.onerror = () => {
+          reject(req.error ?? transaction.error);
+        };
+        transaction.oncomplete = () => {
+          resolve(result);
+        };
+        transaction.onerror = () => {
+          reject(transaction.error);
+        };
+        transaction.onabort = () => {
+          reject(transaction.error);
+        };
       })
   );
 }
 
 export async function idbGetAllNotes(): Promise<Note[]> {
   return tx<Note[]>(STORE_NOTES, "readonly", s => s.getAll());
+}
+
+export async function idbGetNote(id: string): Promise<Note | undefined> {
+  return tx<Note | undefined>(STORE_NOTES, "readonly", s => s.get(id));
 }
 
 export async function idbSaveNote(note: Note): Promise<void> {
@@ -84,12 +103,15 @@ export async function idbSaveAllNotes(notes: Note[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NOTES, "readwrite");
     const store = transaction.objectStore(STORE_NOTES);
-    store.clear();
+    const clearRequest = store.clear();
+    clearRequest.onerror = () => reject(clearRequest.error ?? transaction.error);
     for (const note of notes) {
-      store.put(note);
+      const putRequest = store.put(note);
+      putRequest.onerror = () => reject(putRequest.error ?? transaction.error);
     }
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
 }
 
@@ -102,12 +124,15 @@ export async function idbSaveAllFolders(folders: Folder[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_FOLDERS, "readwrite");
     const store = transaction.objectStore(STORE_FOLDERS);
-    store.clear();
+    const clearRequest = store.clear();
+    clearRequest.onerror = () => reject(clearRequest.error ?? transaction.error);
     for (const folder of folders) {
-      store.put(folder);
+      const putRequest = store.put(folder);
+      putRequest.onerror = () => reject(putRequest.error ?? transaction.error);
     }
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
 }
 

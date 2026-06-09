@@ -1,13 +1,13 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import './index.css';
-import { migrateFromLocalStorage } from '@utils/storage';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./index.css";
+import { migrateFromLocalStorage } from "@utils/storage";
 
-const rootElement = document.getElementById('root');
+const rootElement = document.getElementById("root");
 
 if (!rootElement) {
-  throw new Error('Root element not found!');
+  throw new Error("Root element not found!");
 }
 
 migrateFromLocalStorage()
@@ -16,15 +16,15 @@ migrateFromLocalStorage()
     root.render(
       <StrictMode>
         <App />
-      </StrictMode>,
+      </StrictMode>
     );
   })
-  .catch((error) => {
-    console.error('Failed to initialize storage:', error);
+  .catch(error => {
+    console.error("Failed to initialize storage:", error);
     const root = createRoot(rootElement);
     root.render(
       <StrictMode>
         <App />
-      </StrictMode>,
+      </StrictMode>
     );
   });

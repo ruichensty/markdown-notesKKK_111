@@ -38,6 +38,8 @@ export interface FolderFormData {
 
 export type Theme = "light" | "dark";
 
+export type SaveStatus = "saved" | "saving" | "retrying" | "error";
+
 export interface StorageData {
   notes: Note[];
   folders: Folder[];

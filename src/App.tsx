@@ -55,6 +55,7 @@ function AppContent() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
+  const newNoteLockRef = useRef(false);
 
   const {
     notes,
@@ -69,7 +70,9 @@ function AppContent() {
     getFormattedDate,
     loaded,
     saveError,
+    saveStatus,
     clearSaveError,
+    retrySave,
   } = useNotes(null);
 
   useEffect(() => {
@@ -87,12 +90,19 @@ function AppContent() {
   };
 
   const handleNewNote = (folderIds?: string[]) => {
+    if (newNoteLockRef.current) return;
+    newNoteLockRef.current = true;
+
     try {
       createNote({ title: "", content: "", folderIds });
       setViewMode("split");
       showToast("新笔记已创建", "success");
     } catch (error) {
       handleStorageError(error as Error);
+    } finally {
+      window.setTimeout(() => {
+        newNoteLockRef.current = false;
+      }, 500);
     }
   };
 
@@ -373,7 +383,12 @@ function AppContent() {
             />
           </div>
 
-          <StatusBar allNotes={allNotes} currentNote={currentNote} />
+          <StatusBar
+            allNotes={allNotes}
+            currentNote={currentNote}
+            saveStatus={saveStatus}
+            onRetrySave={retrySave}
+          />
         </div>
       </div>
       {deleteTarget && (

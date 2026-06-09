@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from 'react';
-import type { Theme } from '@types';
-import { loadTheme, saveTheme } from '@utils/storage';
+import { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from "react";
+import type { Theme } from "@types";
+import { loadTheme, saveTheme } from "@utils/storage";
 
 interface ThemeContextType {
   theme: Theme;
@@ -11,11 +11,11 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light');
+  const [theme, setThemeState] = useState<Theme>("light");
 
   useEffect(() => {
     loadTheme()
-      .then((t) => setThemeState(t))
+      .then(t => setThemeState(t))
       .catch(() => {});
   }, []);
 
@@ -25,8 +25,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => {
-      const next: Theme = prev === 'light' ? 'dark' : 'light';
+    setThemeState(prev => {
+      const next: Theme = prev === "light" ? "dark" : "light";
       saveTheme(next).catch(() => {});
       return next;
     });
@@ -34,10 +34,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
+    if (theme === "dark") {
+      root.classList.add("dark");
     } else {
-      root.classList.remove('dark');
+      root.classList.remove("dark");
     }
   }, [theme]);
 
@@ -51,7 +51,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 }
