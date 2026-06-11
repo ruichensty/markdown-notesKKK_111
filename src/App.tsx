@@ -17,6 +17,7 @@ import {
   HomeView,
   ConfirmDialog,
   ParticleBackground,
+  UsageTimeWidget,
 } from "@components";
 import type { EditorHandle } from "@components/Editor";
 
@@ -395,6 +396,8 @@ function AppContent() {
             onRetrySave={retrySave}
           />
         </div>
+
+        <UsageTimeWidget hidden={isMobile} />
       </div>
       {deleteTarget && (
         <ConfirmDialog

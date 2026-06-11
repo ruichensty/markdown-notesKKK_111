@@ -8,3 +8,4 @@ export * from "./useOutline";
 export * from "./useClickOutside";
 export * from "./useWelcomeNote";
 export * from "./useStorageEstimate";
+export * from "./useSessionTime";
