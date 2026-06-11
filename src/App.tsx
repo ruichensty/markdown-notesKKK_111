@@ -16,6 +16,7 @@ import {
   SettingsPanel,
   HomeView,
   ConfirmDialog,
+  ParticleBackground,
 } from "@components";
 import type { EditorHandle } from "@components/Editor";
 
@@ -274,6 +275,10 @@ function AppContent() {
   return (
     <>
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">
+        <ParticleBackground
+          hidden={settings.focusMode || settings.typewriterMode}
+          isMobile={isMobile}
+        />
         {isMobile && sidebarOpen && (
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}

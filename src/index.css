@@ -424,6 +424,65 @@
 
 .content-area {
   background: hsl(var(--background));
+  position: relative;
+  z-index: 1;
+}
+
+.particle-background::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: hsl(var(--primary) / 0.6);
+  box-shadow:
+    0 0 15px 4px hsl(var(--primary) / 0.3),
+    0 0 45px 15px hsl(var(--primary) / 0.15);
+  top: var(--scan-y, 0%);
+  opacity: var(--scan-opacity, 0);
+  pointer-events: none;
+  z-index: 1;
+  animation: particle-scan 4s linear infinite;
+}
+
+@keyframes particle-scan {
+  0% {
+    top: -2px;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .particle-background::after {
+    display: none;
+  }
+}
+
+@keyframes particle-scan {
+  0% {
+    top: -2px;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.08;
+  }
+  90% {
+    opacity: 0.08;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 .app-toolbar {
@@ -627,6 +686,8 @@
   width: var(--sidebar-width, 260px);
   opacity: 1;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
   transition:
     width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     opacity 0.25s ease,
@@ -1298,7 +1359,8 @@
   .status-bar,
   .editor-pane,
   .settings-drawer,
-  .split-handle {
+  .split-handle,
+  .particle-background {
     display: none !important;
   }
 

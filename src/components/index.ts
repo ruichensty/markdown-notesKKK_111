@@ -13,3 +13,4 @@ export { SidebarTabs } from "./SidebarTabs";
 export { SortableNoteList } from "./SortableNoteList";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { AttachmentImage } from "./AttachmentImage";
+export { default as ParticleBackground } from "./ParticleBackground";
