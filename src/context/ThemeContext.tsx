@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode, useCall
 import type { Theme } from "@types";
 import { loadTheme, saveTheme } from "@utils/storage";
 
+const THEMES: Theme[] = ["light", "dark", "black-rainbow"];
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
@@ -16,28 +18,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadTheme()
       .then(t => setThemeState(t))
-      .catch(() => {});
+      .catch(err => console.error("Failed to load theme:", err));
   }, []);
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-    saveTheme(newTheme).catch(() => {});
+    saveTheme(newTheme).catch(err => console.error("Failed to save theme:", err));
   }, []);
 
   const toggleTheme = useCallback(() => {
     setThemeState(prev => {
-      const next: Theme = prev === "light" ? "dark" : "light";
-      saveTheme(next).catch(() => {});
+      const idx = THEMES.indexOf(prev);
+      const next = THEMES[(idx + 1) % THEMES.length];
+      saveTheme(next).catch(err => console.error("Failed to save theme:", err));
       return next;
     });
   }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    root.classList.remove("dark", "black-rainbow");
+    if (theme !== "light") {
+      root.classList.add(theme);
     }
   }, [theme]);
 

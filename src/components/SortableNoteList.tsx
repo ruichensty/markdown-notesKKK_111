@@ -4,6 +4,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { NoteItem } from "./NoteItem";
 import type { Note } from "@types";
+import type { ContextMenuItem } from "./ContextMenu";
 
 interface SortableNoteListProps {
   notes: Note[];
@@ -14,6 +15,7 @@ interface SortableNoteListProps {
   selectionMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  onContextMenu?: (note: Note) => ContextMenuItem[];
 }
 
 function SortableNoteItem({
@@ -24,6 +26,7 @@ function SortableNoteItem({
   selectionMode,
   selected,
   onToggleSelect,
+  onContextMenu,
 }: {
   note: Note;
   isActive: boolean;
@@ -32,6 +35,7 @@ function SortableNoteItem({
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
+  onContextMenu?: (note: Note) => ContextMenuItem[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: note.id });
   const style = {
@@ -49,6 +53,7 @@ function SortableNoteItem({
         selectionMode={selectionMode}
         selected={selected}
         onToggleSelect={onToggleSelect}
+        onContextMenu={onContextMenu}
       />
     </div>
   );
@@ -63,6 +68,7 @@ export function SortableNoteList({
   selectionMode,
   selectedIds,
   onToggleSelect,
+  onContextMenu,
 }: SortableNoteListProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -86,6 +92,7 @@ export function SortableNoteList({
             selectionMode={selectionMode}
             selected={selectedIds?.has(note.id)}
             onToggleSelect={() => onToggleSelect?.(note.id)}
+            onContextMenu={onContextMenu}
           />
         ))}
       </SortableContext>

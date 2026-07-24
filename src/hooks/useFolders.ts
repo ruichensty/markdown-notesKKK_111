@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import type { Folder as FolderBase } from "@types";
 import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
+import { getAllDataCache } from "@utils/storage";
 
 export interface Folder extends FolderBase {
   children?: Folder[];
@@ -11,6 +12,12 @@ export function useFolders() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    const cached = getAllDataCache();
+    if (cached) {
+      setFolders(cached.folders || []);
+      setLoaded(true);
+      return;
+    }
     idbGetAllFolders()
       .then(data => {
         setFolders(data || []);
@@ -24,9 +31,12 @@ export function useFolders() {
 
   useEffect(() => {
     if (!loaded) return;
-    idbSaveAllFolders(folders).catch(error => {
-      console.error("Failed to save folders:", error);
-    });
+    const timeoutId = window.setTimeout(() => {
+      idbSaveAllFolders(folders).catch(error => {
+        console.error("Failed to save folders:", error);
+      });
+    }, 300);
+    return () => window.clearTimeout(timeoutId);
   }, [folders, loaded]);
 
   const createFolder = useCallback((data: Omit<Folder, "id" | "children">) => {

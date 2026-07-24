@@ -1,4 +1,4 @@
-import { useMemo, useCallback, memo, lazy, Suspense } from "react";
+import { useMemo, memo, lazy, Suspense, createContext, useContext, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -62,6 +62,85 @@ const MermaidDiagram = lazy(() =>
   import("./MermaidDiagram").then(module => ({ default: module.MermaidDiagram }))
 );
 
+interface PreviewConfig {
+  theme: string;
+  showLineNumbers: boolean;
+}
+
+const PreviewConfigContext = createContext<PreviewConfig>({
+  theme: "light",
+  showLineNumbers: false,
+});
+
+function CodeBlock({
+  className,
+  children,
+  ...props
+}: {
+  inline?: boolean;
+  className?: string;
+  children?: ReactNode;
+} & React.HTMLAttributes<HTMLElement>) {
+  const { theme, showLineNumbers } = useContext(PreviewConfigContext);
+  const match = /language-(\w+)/.exec(className || "");
+  const isInline = (props as Record<string, unknown>).inline !== true;
+
+  const isDarkTheme = theme === "dark" || theme === "black-rainbow";
+
+  if (isInline && match) {
+    const lang = match[1];
+    const code = String(children).replace(/\n$/, "");
+    if (lang === "mermaid") {
+      return (
+        <Suspense
+          fallback={
+            <div className="my-4 text-center text-xs text-muted-foreground">Loading diagram...</div>
+          }
+        >
+          <MermaidDiagram code={code} />
+        </Suspense>
+      );
+    }
+    return (
+      <SyntaxHighlighter
+        {...props}
+        style={isDarkTheme ? vscDarkPlus : vs}
+        language={lang}
+        PreTag="div"
+        showLineNumbers={showLineNumbers}
+        customStyle={{
+          background: "transparent",
+          padding: "1rem",
+          borderRadius: "0.5rem",
+          margin: "1rem 0",
+          fontSize: "0.875rem",
+        }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    );
+  }
+  return (
+    <code
+      {...props}
+      className={`${className || ""} bg-muted/60 px-1.5 py-0.5 rounded text-[0.8rem] text-foreground`}
+    >
+      {children}
+    </code>
+  );
+}
+
+const MemoizedCodeBlock = memo(CodeBlock);
+
+function ImgComponent({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) {
+  if (src?.startsWith("attachment://")) {
+    return <AttachmentImage src={src} alt={alt || ""} />;
+  }
+  return <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg" {...props} />;
+}
+
+const MemoizedImg = memo(ImgComponent);
+
 interface PreviewProps {
   note: Note;
   showLineNumbers?: boolean;
@@ -71,62 +150,8 @@ function Preview({ note, showLineNumbers = false }: PreviewProps) {
   const { theme } = useTheme();
   const debouncedContent = useDebounce(note.content || "", 300);
 
-  const CodeComponent = useCallback(
-    ({
-      inline,
-      className,
-      children,
-      ...props
-    }: {
-      inline?: boolean;
-      className?: string;
-      children?: React.ReactNode;
-    } & React.HTMLAttributes<HTMLElement>) => {
-      const match = /language-(\w+)/.exec(className || "");
-      if (!inline && match) {
-        const lang = match[1];
-        const code = String(children).replace(/\n$/, "");
-        if (lang === "mermaid") {
-          return (
-            <Suspense
-              fallback={
-                <div className="my-4 text-center text-xs text-muted-foreground">
-                  Loading diagram...
-                </div>
-              }
-            >
-              <MermaidDiagram code={code} />
-            </Suspense>
-          );
-        }
-        return (
-          <SyntaxHighlighter
-            {...props}
-            style={theme === "dark" ? vscDarkPlus : vs}
-            language={lang}
-            PreTag="div"
-            showLineNumbers={showLineNumbers}
-            customStyle={{
-              background: "transparent",
-              padding: "1rem",
-              borderRadius: "0.5rem",
-              margin: "1rem 0",
-              fontSize: "0.875rem",
-            }}
-          >
-            {code}
-          </SyntaxHighlighter>
-        );
-      }
-      return (
-        <code
-          {...props}
-          className={`${className || ""} bg-muted/60 px-1.5 py-0.5 rounded text-[0.8rem] text-foreground`}
-        >
-          {children}
-        </code>
-      );
-    },
+  const config = useMemo<PreviewConfig>(
+    () => ({ theme, showLineNumbers }),
     [theme, showLineNumbers]
   );
 
@@ -135,41 +160,36 @@ function Preview({ note, showLineNumbers = false }: PreviewProps) {
     [debouncedContent]
   );
 
-  const ImgComponent = useCallback(
-    ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      if (src?.startsWith("attachment://")) {
-        return <AttachmentImage src={src} alt={alt || ""} />;
-      }
-      return <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg" {...props} />;
-    },
-    []
-  );
-
   const memoizedComponents = useMemo<Components>(
     () => ({
-      code: CodeComponent,
-      img: ImgComponent,
+      code: MemoizedCodeBlock,
+      img: MemoizedImg,
     }),
-    [CodeComponent, ImgComponent]
+    []
   );
 
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
   const rehypePlugins = useMemo(() => [rehypeRaw, rehypeSanitize, rehypeKatex], []);
 
   return (
-    <div className="preview-pane flex-1 flex flex-col overflow-hidden print-area">
-      <div className="preview-scroll flex-1 overflow-y-auto scrollbar-thin">
-        <div className="prose prose-sm max-w-none">
-          <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            rehypePlugins={rehypePlugins}
-            components={memoizedComponents}
-          >
-            {memoizedContent}
-          </ReactMarkdown>
+    <PreviewConfigContext.Provider value={config}>
+      <div className="preview-pane flex-1 flex flex-col overflow-hidden print-area">
+        <div className="preview-scroll flex-1 overflow-y-auto scrollbar-thin">
+          <div className="preview-reading-surface">
+            <div className="preview-kicker">Preview</div>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown
+                remarkPlugins={remarkPlugins}
+                rehypePlugins={rehypePlugins}
+                components={memoizedComponents}
+              >
+                {memoizedContent}
+              </ReactMarkdown>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </PreviewConfigContext.Provider>
   );
 }
 

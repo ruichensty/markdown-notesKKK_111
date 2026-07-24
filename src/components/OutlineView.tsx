@@ -51,7 +51,7 @@ export const OutlineView = memo(function OutlineView({
             onClick={() => onJumpToLine(h.line)}
             className={`w-full text-left px-3 py-1 text-[11px] truncate transition-colors outline-none ${
               isActive
-                ? "text-primary bg-primary/8"
+                ? "text-primary bg-primary/10"
                 : "text-foreground/65 hover:text-foreground hover:bg-muted/40"
             }`}
             style={{ paddingLeft: `${indent + 12}px` }}

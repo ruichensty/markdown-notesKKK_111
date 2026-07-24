@@ -2,6 +2,8 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import type { Note } from "@types";
 
+marked.use({ async: false });
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -46,7 +48,7 @@ export function exportAsMarkdown(note: Note): void {
 export function exportAsHTML(note: Note): void {
   try {
     const filename = sanitizeFilename(note.title);
-    const htmlBody = DOMPurify.sanitize(marked.parse(note.content) as string);
+    const htmlBody = DOMPurify.sanitize(String(marked.parse(note.content)));
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -100,6 +102,16 @@ export function exportAsText(note: Note): void {
 
 export function exportAsPDF(): void {
   window.print();
+}
+
+export function sortNotes<T extends { order?: number | null; updatedAt?: number }>(
+  notes: T[]
+): T[] {
+  const hasOrder = notes.some(n => n.order !== undefined && n.order !== null);
+  if (hasOrder) {
+    return [...notes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  return [...notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
 export function generateId(): string {

@@ -41,12 +41,11 @@ export function useSessionTime() {
   const [isRunning, setIsRunning] = useState(true);
   const prevDayRef = useRef(DAY_KEY());
 
+  const dirtyRef = useRef(false);
+
   const tick = useCallback(() => {
-    setTodaySeconds(prev => {
-      const next = prev + 1;
-      saveUsage({ date: DAY_KEY(), seconds: loadUsage().seconds + 1 });
-      return next;
-    });
+    setTodaySeconds(prev => prev + 1);
+    dirtyRef.current = true;
   }, []);
 
   useEffect(() => {
@@ -61,6 +60,13 @@ export function useSessionTime() {
         prevDayRef.current = DAY_KEY();
         setTodaySeconds(0);
         saveUsage({ date: DAY_KEY(), seconds: 0 });
+      }
+      if (dirtyRef.current) {
+        dirtyRef.current = false;
+        setTodaySeconds(prev => {
+          saveUsage({ date: DAY_KEY(), seconds: prev });
+          return prev;
+        });
       }
     }, 30_000);
     return () => clearInterval(id);

@@ -1,11 +1,16 @@
 import { useState, useRef, lazy, Suspense, useEffect, useCallback } from "react";
-import { ThemeProvider, ToastProvider, useToast } from "@context";
+import { ThemeProvider, ToastProvider, useToast, useTheme } from "@context";
 import {
   useNotes,
+  useFolders,
   useKeyboardShortcuts,
   useErrorHandler,
   useSettings,
   useWelcomeNote,
+  useEyeCare,
+  useSessionTime,
+  useHealthReminder,
+  useTemplates,
 } from "@hooks";
 import {
   Toolbar,
@@ -15,11 +20,18 @@ import {
   ErrorBoundary,
   SettingsPanel,
   HomeView,
-  ConfirmDialog,
   ParticleBackground,
   UsageTimeWidget,
+  DoodleCanvas,
+  HealthReminderPopup,
+  CommandPalette,
+  TemplatePicker,
+  TrashView,
 } from "@components";
+import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
+import { applyTemplateVariables } from "@utils/template";
+import { applyAccent } from "./constants/accents";
 
 const Preview = lazy(() => import("./components/Preview"));
 
@@ -38,10 +50,33 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
-          <AppContent />
+          <ContextMenuProvider>
+            <AppContent />
+          </ContextMenuProvider>
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-background z-50">
+      <div className="animate-pulse mb-3 text-foreground/20">
+        <svg
+          viewBox="0 0 16 16"
+          width="40"
+          height="40"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.2}
+        >
+          <path d="M4.5 1.5h4.672a1 1 0 01.707.293l3.328 3.328a1 1 0 01.293.707V13a1.5 1.5 0 01-1.5 1.5h-7.5A1.5 1.5 0 013 13V3a1.5 1.5 0 011.5-1.5z" />
+          <path d="M9 1.5V6h4.5" />
+        </svg>
+      </div>
+      <p className="text-xs text-muted-foreground/50">Loading...</p>
+    </div>
   );
 }
 
@@ -49,15 +84,33 @@ function AppContent() {
   const { showToast } = useToast();
   const { handleStorageError } = useErrorHandler();
   const { settings, updateSettings } = useSettings();
+  const { theme, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    applyAccent(settings.accentColor, theme);
+  }, [settings.accentColor, theme]);
+  const eyeCare = useEyeCare(settings.eyeCare);
+  const sessionTime = useSessionTime();
+  const healthReminder = useHealthReminder(
+    settings.healthReminder,
+    settings.reminderInterval,
+    sessionTime.todaySeconds,
+    settings.focusMode
+  );
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split">("home");
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const newNoteLockRef = useRef(false);
+
+  const { templates } = useTemplates();
 
   const {
     notes,
@@ -69,20 +122,29 @@ function AppContent() {
     updateNote,
     deleteNote,
     reorderNotes,
+    reorderNotesInFolder,
     getFormattedDate,
     loaded,
     saveError,
     saveStatus,
-    clearSaveError,
     retrySave,
+    saveNow,
+    trashedNotes,
+    restoreNote,
+    purgeNote,
+    emptyTrash,
   } = useNotes(null);
+
+  const { folders, updateFolder } = useFolders();
 
   useEffect(() => {
     if (saveError) {
-      showToast("保存失败，请检查存储空间", "error");
-      clearSaveError();
+      showToast("保存失败，请检查存储空间后重试", "error", 0, {
+        label: "重试",
+        onClick: retrySave,
+      });
     }
-  }, [saveError, clearSaveError, showToast]);
+  }, [saveError, retrySave, showToast]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
@@ -91,14 +153,32 @@ function AppContent() {
     editorRef.current?.scrollToLine(line);
   };
 
-  const handleNewNote = (folderIds?: string[]) => {
+  const handleNewNote = (folderIds?: string[], templateId?: string) => {
     if (newNoteLockRef.current) return;
     newNoteLockRef.current = true;
 
     try {
-      createNote({ title: "", content: "", folderIds });
+      let title = "";
+      let content = "";
+
+      if (templateId) {
+        const tpl = templates.find(t => t.id === templateId);
+        if (tpl) {
+          title = tpl.name;
+          content = tpl.content;
+        }
+      }
+
+      const newNote = createNote({ title, content, folderIds });
       setViewMode("split");
       showToast("新笔记已创建", "success");
+
+      if (content) {
+        requestAnimationFrame(() => {
+          const applied = applyTemplateVariables(content, title);
+          updateNote(newNote.id, { title, content: applied });
+        });
+      }
     } catch (error) {
       handleStorageError(error as Error);
     } finally {
@@ -107,6 +187,23 @@ function AppContent() {
       }, 500);
     }
   };
+
+  const handleNewNoteFromPicker = (templateId: string | undefined) => {
+    handleNewNote(undefined, templateId);
+  };
+
+  const handleInsertTemplate = useCallback(
+    (templateId: string) => {
+      const tpl = templates.find(t => t.id === templateId);
+      if (!tpl || !currentNote) return;
+
+      const applied = applyTemplateVariables(tpl.content, currentNote.title || "Untitled");
+      const newContent = currentNote.content ? currentNote.content + "\n\n" + applied : applied;
+      updateNote(currentNote.id, { content: newContent });
+      showToast(`已插入模板「${tpl.name}」`, "success");
+    },
+    [templates, currentNote, updateNote, showToast]
+  );
 
   const handleNoteUpdate = (id: string, data: { title?: string; content?: string }) => {
     try {
@@ -119,7 +216,11 @@ function AppContent() {
   const handleNoteSelect = useCallback(
     (id: string) => {
       setCurrentNoteId(id);
-      if (isMobile) setSidebarOpen(false);
+      if (isMobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
     },
     [isMobile, setCurrentNoteId]
   );
@@ -158,6 +259,9 @@ function AppContent() {
   const handleGoHome = () => {
     setCurrentNoteId(null);
     setViewMode("home");
+    if (settings.homeLayout === "writer" || settings.homeLayout === "curtain") {
+      setSidebarOpen(false);
+    }
   };
 
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
@@ -207,14 +311,91 @@ function AppContent() {
     [allNotes, updateNote]
   );
 
+  const handleNoteDelete = useCallback(
+    (id: string) => {
+      const note = allNotes.find(n => n.id === id);
+      const title = note?.title || "Untitled";
+      deleteNote(id);
+      showToast(`已将「${title}」移入回收站`, "success", 5000, {
+        label: "撤销",
+        onClick: () => restoreNote(id),
+      });
+    },
+    [allNotes, deleteNote, restoreNote, showToast]
+  );
+
   const handleBatchDelete = useCallback(
     (ids: string[]) => {
       for (const id of ids) {
         deleteNote(id);
       }
-      showToast(`已删除 ${ids.length} 条笔记`, "success");
+      showToast(`已将 ${ids.length} 条笔记移入回收站`, "success", 5000, {
+        label: "撤销",
+        onClick: () => {
+          for (const id of ids) restoreNote(id);
+        },
+      });
     },
-    [deleteNote, showToast]
+    [deleteNote, restoreNote, showToast]
+  );
+
+  const handleMoveNoteToFolder = useCallback(
+    (noteId: string, folderId: string) => {
+      const note = allNotes.find(n => n.id === noteId);
+      if (!note) return;
+      const currentFolders = note.folderIds || [];
+      if (!currentFolders.includes(folderId)) {
+        updateNote(noteId, { folderIds: [...currentFolders, folderId] });
+        showToast("笔记已移动", "success");
+      }
+    },
+    [allNotes, updateNote, showToast]
+  );
+
+  const handleMoveNoteToRoot = useCallback(
+    (noteId: string) => {
+      updateNote(noteId, { folderIds: [] });
+      showToast("笔记已移出文件夹", "success");
+    },
+    [updateNote, showToast]
+  );
+
+  const handleBatchMoveToFolder = useCallback(
+    (ids: string[], folderId: string) => {
+      let count = 0;
+      for (const id of ids) {
+        const note = allNotes.find(n => n.id === id);
+        if (!note) continue;
+        const currentFolders = note.folderIds || [];
+        if (!currentFolders.includes(folderId)) {
+          updateNote(id, { folderIds: [...currentFolders, folderId] });
+          count++;
+        }
+      }
+      if (count > 0) showToast(`已移动 ${count} 条笔记`, "success");
+    },
+    [allNotes, updateNote, showToast]
+  );
+
+  const handleCopyNote = useCallback(
+    (noteId: string) => {
+      const note = allNotes.find(n => n.id === noteId);
+      if (!note) return;
+      createNote({
+        title: `${note.title} (副本)`,
+        content: note.content,
+        folderIds: note.folderIds || [],
+      });
+      showToast("笔记已复制", "success");
+    },
+    [allNotes, createNote, showToast]
+  );
+
+  const handleReorderFolder = useCallback(
+    (folderId: string, newParentId: string | null) => {
+      updateFolder(folderId, { parentId: newParentId });
+    },
+    [updateFolder]
   );
 
   useWelcomeNote(loaded, notes, createNote, handleStorageError, showToast);
@@ -225,8 +406,11 @@ function AppContent() {
       ctrlKey: true,
       handler: () => {
         if (currentNote) {
-          handleNoteUpdate(currentNote.id, {});
-          showToast("笔记已保存", "success");
+          void saveNow()
+            .then(saved => {
+              if (saved) showToast("笔记已保存", "success");
+            })
+            .catch(() => {});
         }
       },
       preventDefault: true,
@@ -234,8 +418,15 @@ function AppContent() {
     {
       key: "n",
       ctrlKey: true,
-      handler: handleNewNote,
+      handler: () => handleNewNote(),
       preventDefault: true,
+    },
+    {
+      key: "k",
+      ctrlKey: true,
+      handler: () => setShowCommandPalette(prev => !prev),
+      preventDefault: true,
+      allowInEditable: true,
     },
     {
       key: "f",
@@ -273,6 +464,10 @@ function AppContent() {
     },
   ]);
 
+  if (!loaded) {
+    return <LoadingScreen />;
+  }
+
   return (
     <>
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">
@@ -280,36 +475,60 @@ function AppContent() {
           hidden={settings.focusMode || settings.typewriterMode}
           isMobile={isMobile}
         />
-        {isMobile && sidebarOpen && (
+        {isMobile && sidebarOpen && viewMode !== "home" && (
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}
-        <NoteList
-          notes={notes}
-          activeNoteId={currentNoteId}
-          onNoteSelect={id => {
-            handleNoteSelect(id);
-            if (viewMode === "home") setViewMode(isMobile ? "editor" : "split");
-          }}
-          onNewNote={handleNewNote}
-          onNoteDelete={id => {
-            setDeleteTarget(id);
-          }}
-          onRemoveFolderFromNotes={handleRemoveFolderFromNotes}
-          onReorderNotes={reorderNotes}
-          searchInputRef={searchInputRef}
-          getFormattedDate={getFormattedDate}
-          sidebarWidth={settings.sidebarWidth}
-          collapsed={!sidebarOpen}
-          currentNoteContent={currentNote?.content}
-          onJumpToLine={handleJumpToLine}
-          isMobile={isMobile}
-          onBatchDelete={handleBatchDelete}
-        />
+        {viewMode !== "home" && (
+          <NoteList
+            notes={notes}
+            activeNoteId={currentNoteId}
+            onNoteSelect={id => {
+              handleNoteSelect(id);
+              setViewMode(isMobile ? "editor" : "split");
+            }}
+            onNewNote={() => {
+              if (templates.length > 0) {
+                setShowTemplatePicker(true);
+              } else {
+                handleNewNote();
+              }
+            }}
+            onNoteDelete={handleNoteDelete}
+            onRemoveFolderFromNotes={handleRemoveFolderFromNotes}
+            onReorderNotes={reorderNotes}
+            onReorderNotesInFolder={reorderNotesInFolder}
+            expandedFolders={settings.expandedFolders}
+            onExpandedFoldersChange={ids => updateSettings({ expandedFolders: ids })}
+            onBatchMoveToFolder={handleBatchMoveToFolder}
+            searchInputRef={searchInputRef}
+            getFormattedDate={getFormattedDate}
+            sidebarWidth={settings.sidebarWidth}
+            collapsed={!sidebarOpen}
+            currentNoteContent={currentNote?.content}
+            onJumpToLine={handleJumpToLine}
+            isMobile={isMobile}
+            onBatchDelete={handleBatchDelete}
+            onMoveNoteToFolder={handleMoveNoteToFolder}
+            onMoveNoteToRoot={handleMoveNoteToRoot}
+            onCopyNote={handleCopyNote}
+            onReorderFolder={handleReorderFolder}
+            trashCount={trashedNotes.length}
+            onOpenTrash={() => setShowTrash(true)}
+            selectedFolderId={selectedFolderId}
+            onClearFolderSelection={() => setSelectedFolderId(null)}
+          />
+        )}
 
         <div className="content-area flex-1 flex flex-col min-w-0 overflow-hidden relative">
           <Toolbar
             currentNote={currentNote}
-            onNewNote={handleNewNote}
+            onNewNote={() => {
+              if (templates.length > 0) {
+                setShowTemplatePicker(true);
+              } else {
+                handleNewNote();
+              }
+            }}
             showExportMenu={showExportMenu}
             onToggleExportMenu={handleExportMenuToggle}
             onToggleSidebar={handleToggleSidebar}
@@ -328,7 +547,21 @@ function AppContent() {
 
           <div className="flex-1 flex overflow-hidden relative">
             {viewMode === "home" ? (
-              <HomeView onNewNote={handleNewNote} />
+              <HomeView
+                onNewNote={() => {
+                  if (templates.length > 0) {
+                    setShowTemplatePicker(true);
+                  } else {
+                    handleNewNote();
+                  }
+                }}
+                notes={allNotes}
+                onNoteSelect={id => {
+                  handleNoteSelect(id);
+                  setViewMode(isMobile ? "editor" : "split");
+                }}
+                layout={settings.homeLayout}
+              />
             ) : currentNote ? (
               <div className="flex-1 flex min-w-0">
                 {(viewMode === "editor" || viewMode === "split") && (
@@ -349,12 +582,21 @@ function AppContent() {
                       ref={editorRef}
                       note={currentNote}
                       onUpdate={handleNoteUpdate}
+                      onSave={() => {
+                        void saveNow()
+                          .then(saved => {
+                            if (saved) showToast("笔记已保存", "success");
+                          })
+                          .catch(() => {});
+                      }}
                       fontSize={settings.fontSize}
                       lineHeight={settings.lineHeight}
+                      fontFamily={settings.fontFamily}
                       focusMode={settings.focusMode}
                       typewriterMode={settings.typewriterMode}
                       autoPair={settings.autoPair}
                       isMobile={isMobile}
+                      typingSound={settings.typingSound}
                       onAttachmentAdd={attachment =>
                         handleAttachmentAdd(currentNote.id, attachment)
                       }
@@ -378,7 +620,15 @@ function AppContent() {
                 )}
               </div>
             ) : (
-              <HomeView onNewNote={handleNewNote} />
+              <HomeView
+                onNewNote={handleNewNote}
+                notes={allNotes}
+                onNoteSelect={id => {
+                  handleNoteSelect(id);
+                  setViewMode(isMobile ? "editor" : "split");
+                }}
+                layout={settings.homeLayout}
+              />
             )}
 
             <SettingsPanel
@@ -386,7 +636,15 @@ function AppContent() {
               onClose={() => setShowSettings(false)}
               settings={settings}
               onUpdate={updateSettings}
+              onInsertTemplate={handleInsertTemplate}
             />
+
+            {settings.doodleLayer && currentNote && (
+              <DoodleCanvas
+                visible={settings.doodleLayer}
+                onClear={() => showToast("涂鸦已清除", "success")}
+              />
+            )}
           </div>
 
           <StatusBar
@@ -398,17 +656,77 @@ function AppContent() {
         </div>
 
         <UsageTimeWidget hidden={isMobile} />
+
+        {eyeCare.isActive && (
+          <div className="eyecare-indicator" title={eyeCare.phaseLabel}>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+            <span>{eyeCare.phaseLabel}</span>
+          </div>
+        )}
       </div>
-      {deleteTarget && (
-        <ConfirmDialog
-          message="确定要删除这条笔记吗？此操作不可恢复。"
-          onConfirm={() => {
-            deleteNote(deleteTarget);
-            setDeleteTarget(null);
-          }}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      <HealthReminderPopup
+        visible={healthReminder.visible}
+        message={healthReminder.message}
+        onDismiss={healthReminder.dismiss}
+        onSnooze={healthReminder.snooze}
+      />
+      <CommandPalette
+        open={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        notes={allNotes}
+        folders={folders}
+        templates={templates}
+        onSelectNote={id => {
+          setSelectedFolderId(null);
+          handleNoteSelect(id);
+          if (viewMode === "home") setViewMode(isMobile ? "editor" : "split");
+        }}
+        onSelectFolder={id => {
+          setSelectedFolderId(id);
+          setSidebarOpen(true);
+        }}
+        onNewNote={templateId => handleNewNote(undefined, templateId)}
+        onToggleTheme={toggleTheme}
+        onToggleSettings={handleToggleSettings}
+        onToggleFocusMode={() => updateSettings({ focusMode: !settings.focusMode })}
+        onToggleTypewriterMode={() => updateSettings({ typewriterMode: !settings.typewriterMode })}
+        onGoHome={handleGoHome}
+        focusMode={settings.focusMode}
+        typewriterMode={settings.typewriterMode}
+      />
+      <TemplatePicker
+        open={showTemplatePicker}
+        onClose={() => setShowTemplatePicker(false)}
+        templates={templates}
+        onSelect={handleNewNoteFromPicker}
+      />
+      <TrashView
+        open={showTrash}
+        onClose={() => setShowTrash(false)}
+        notes={trashedNotes}
+        onRestore={id => {
+          restoreNote(id);
+          showToast("笔记已恢复", "success");
+        }}
+        onPurge={id => {
+          purgeNote(id);
+          showToast("已永久删除", "success");
+        }}
+        onEmptyTrash={() => {
+          emptyTrash();
+          showToast("回收站已清空", "success");
+        }}
+      />
     </>
   );
 }

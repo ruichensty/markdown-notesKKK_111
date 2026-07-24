@@ -1,11 +1,12 @@
-import type { Note, Folder, Theme, StorageData } from "@types";
+import type { Note, Folder, Theme, StorageData, NoteTemplate } from "@types";
 
 const DB_NAME = "markdown-notes-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NOTES = "notes";
 const STORE_FOLDERS = "folders";
 const STORE_SETTINGS = "settings";
 const STORE_FILES = "files";
+const STORE_TEMPLATES = "templates";
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -35,6 +36,10 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_FILES)) {
         const fileStore = db.createObjectStore(STORE_FILES, { keyPath: "id" });
         fileStore.createIndex("noteId", "noteId", { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_TEMPLATES)) {
+        db.createObjectStore(STORE_TEMPLATES, { keyPath: "id" });
       }
     };
 
@@ -169,17 +174,36 @@ export async function migrateFromLocalStorage(): Promise<void> {
   }
 }
 
+let allDataCache: StorageData | null = null;
+let allDataPromise: Promise<StorageData> | null = null;
+
+export function getAllDataCache(): StorageData | null {
+  return allDataCache;
+}
+
+export function invalidateAllDataCache(): void {
+  allDataCache = null;
+  allDataPromise = null;
+}
+
 export async function loadAllData(): Promise<StorageData> {
-  const [notes, folders, theme] = await Promise.all([
+  if (allDataCache) return allDataCache;
+  if (allDataPromise) return allDataPromise;
+
+  allDataPromise = Promise.all([
     idbGetAllNotes(),
     idbGetAllFolders(),
     idbGetSetting<Theme>("theme"),
-  ]);
-  return {
-    notes: notes || [],
-    folders: folders || [],
-    theme: theme || "light",
-  };
+  ]).then(([notes, folders, theme]) => {
+    allDataCache = {
+      notes: notes || [],
+      folders: folders || [],
+      theme: theme || "light",
+    };
+    return allDataCache;
+  });
+
+  return allDataPromise;
 }
 
 export async function idbSaveFile(
@@ -202,4 +226,16 @@ export async function idbGetFile(
 
 export async function idbDeleteFile(id: string): Promise<void> {
   await tx<undefined>(STORE_FILES, "readwrite", s => s.delete(id));
+}
+
+export async function idbGetAllTemplates(): Promise<NoteTemplate[]> {
+  return tx<NoteTemplate[]>(STORE_TEMPLATES, "readonly", s => s.getAll());
+}
+
+export async function idbSaveTemplate(template: NoteTemplate): Promise<void> {
+  await tx(STORE_TEMPLATES, "readwrite", s => s.put(template));
+}
+
+export async function idbDeleteTemplate(id: string): Promise<void> {
+  await tx<undefined>(STORE_TEMPLATES, "readwrite", s => s.delete(id));
 }

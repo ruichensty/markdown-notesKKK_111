@@ -42,3 +42,8 @@ coverage
 *.tmp
 .cache
 .temp
+
+# Stray redirect/log artifacts
+dev.err
+dev.out
+nul

@@ -33,12 +33,18 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
   }, []);
 
   const options: ISourceOptions = useMemo(() => {
-    const isDark = theme === "dark";
+    const isDark = theme === "dark" || theme === "black-rainbow";
+    const isRainbow = theme === "black-rainbow";
 
-    const nodeColor = isDark ? "#38bdf8" : "#0284c7";
-    const edgeColor = isDark ? "#0ea5e9" : "#0ea5e9";
-    const glowColor = isDark ? "#0369a1" : "#bae6fd";
-    const pulseColor = isDark ? "#7dd3fc" : "#7dd3fc";
+    const nodeColor = isRainbow ? "#c084fc" : isDark ? "#38bdf8" : "#0284c7";
+    const edgeColor = isRainbow ? "#f472b6" : "#0ea5e9";
+    const glowColor = isRainbow ? "#22d3ee" : isDark ? "#0369a1" : "#bae6fd";
+    const pulseColor = isRainbow ? "#facc15" : "#7dd3fc";
+
+    const codeColors = isRainbow
+      ? ["#c084fc", "#f472b6", "#22d3ee", "#facc15", "#4ade80"]
+      : [nodeColor, pulseColor, glowColor];
+
     if (reduceMotion || isMobile) {
       return {
         fullScreen: false,
@@ -46,7 +52,7 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
         background: { color: { value: "transparent" } },
         particles: {
           number: { value: 25, density: { enable: true, width: 1400, height: 900 } },
-          color: { value: nodeColor },
+          color: { value: codeColors },
           opacity: { value: { min: 0.15, max: 0.4 } },
           shape: { type: "polygon", options: { polygon: { sides: 6 } } },
           size: { value: { min: 2, max: 4 } },
@@ -63,7 +69,7 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
       background: { color: { value: "transparent" } },
       particles: {
         number: { value: 55, density: { enable: true, width: 1400, height: 900 } },
-        color: { value: [nodeColor, pulseColor, glowColor] },
+        color: { value: codeColors },
         opacity: {
           value: { min: 0.25, max: 0.6 },
           animation: {
@@ -86,7 +92,7 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
         stroke: { color: glowColor, width: 0.4 },
         move: {
           enable: true,
-          speed: 0.4,
+          speed: isRainbow ? 0.6 : 0.4,
           direction: "none",
           random: true,
           straight: false,

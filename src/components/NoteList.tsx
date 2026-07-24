@@ -1,12 +1,16 @@
-import { useState, useMemo, useCallback, memo } from "react";
+import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { OutlineView } from "./OutlineView";
 import { SortableNoteList } from "./SortableNoteList";
 import { SearchResults } from "./SearchResults";
 import { SidebarTabs } from "./SidebarTabs";
 import type { SidebarTab } from "./SidebarTabs";
 import { FolderTree } from "./FolderTree";
+import { EmptyStateIllustration } from "./EmptyStateIllustration";
 import { useFolders, useOutline, useDebounce } from "@hooks";
+import { sortNotes } from "@utils/export";
 import type { Note } from "@types";
+import { useContextMenu } from "./ContextMenu";
+import type { ContextMenuItem } from "./ContextMenu";
 
 interface NoteListProps {
   notes: Note[];
@@ -25,34 +29,40 @@ interface NoteListProps {
   isMobile?: boolean;
   onBatchDelete?: (ids: string[]) => void;
   onBatchMoveToFolder?: (ids: string[], folderId: string) => void;
-}
-
-function sortNotes(notes: Note[]): Note[] {
-  const hasOrder = notes.some(n => n.order !== undefined && n.order !== null);
-  if (hasOrder) {
-    return [...notes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-  return [...notes].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  onMoveNoteToFolder?: (noteId: string, folderId: string) => void;
+  onMoveNoteToRoot?: (noteId: string) => void;
+  onCopyNote?: (noteId: string) => void;
+  onReorderFolder?: (folderId: string, newParentId: string | null) => void;
+  trashCount?: number;
+  onOpenTrash?: () => void;
+  selectedFolderId?: string | null;
+  onClearFolderSelection?: () => void;
+  expandedFolders?: string[];
+  onExpandedFoldersChange?: (ids: string[]) => void;
+  onReorderNotesInFolder?: (folderId: string, activeId: string, overId: string) => void;
 }
 
 function EmptyNotes() {
   return (
     <div className="sidebar-empty">
-      <svg
-        className="w-8 h-8 text-muted-foreground/20 mb-2"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <p className="text-[10px] text-muted-foreground/50">暂无笔记</p>
-      <p className="text-[9px] text-muted-foreground/30 mt-0.5">点击上方按钮创建</p>
+      <EmptyStateIllustration />
+      <p className="text-[10px] text-muted-foreground/40 mt-2">暂无笔记</p>
+      <p className="text-[9px] text-muted-foreground/25 mt-0.5">点击上方按钮创建</p>
     </div>
   );
+}
+
+type FlatFolder = { id: string; name: string; children?: FlatFolder[] };
+function flattenFoldersForMenu(
+  tree: FlatFolder[],
+  depth = 0,
+  acc: { folder: FlatFolder; depth: number }[] = []
+): { folder: FlatFolder; depth: number }[] {
+  for (const f of tree) {
+    acc.push({ folder: f, depth });
+    if (f.children?.length) flattenFoldersForMenu(f.children, depth + 1, acc);
+  }
+  return acc;
 }
 
 function NoteList({
@@ -69,12 +79,25 @@ function NoteList({
   currentNoteContent,
   onJumpToLine,
   onBatchDelete,
+  onMoveNoteToFolder,
+  onMoveNoteToRoot,
+  onCopyNote,
+  onReorderFolder,
+  trashCount = 0,
+  onOpenTrash,
+  selectedFolderId = null,
+  onClearFolderSelection,
+  expandedFolders = [],
+  onExpandedFoldersChange,
+  onReorderNotesInFolder,
+  onBatchMoveToFolder,
 }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("notes");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  const { show: showContextMenu } = useContextMenu();
   const { folderTree, folders, createFolder, deleteFolder, updateFolder } = useFolders();
   const headings = useOutline(currentNoteContent || "");
 
@@ -98,6 +121,16 @@ function NoteList({
       )
     );
   }, [notes, debouncedSearchQuery]);
+
+  const selectedFolder = useMemo(
+    () => folders.find(folder => folder.id === selectedFolderId) ?? null,
+    [folders, selectedFolderId]
+  );
+
+  const selectedFolderNotes = useMemo(() => {
+    if (!selectedFolderId) return [];
+    return sortNotes(notes.filter(note => note.folderIds?.includes(selectedFolderId)));
+  }, [notes, selectedFolderId]);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -134,6 +167,26 @@ function NoteList({
     [folders, deleteFolder, onRemoveFolderFromNotes]
   );
 
+  const allFolderIds = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (list: typeof folderTree) => {
+      for (const f of list) {
+        ids.push(f.id);
+        if (f.children?.length) walk(f.children);
+      }
+    };
+    walk(folderTree);
+    return ids;
+  }, [folderTree]);
+
+  const handleExpandAll = useCallback(() => {
+    onExpandedFoldersChange?.(allFolderIds);
+  }, [allFolderIds, onExpandedFoldersChange]);
+
+  const handleCollapseAll = useCallback(() => {
+    onExpandedFoldersChange?.([]);
+  }, [onExpandedFoldersChange]);
+
   const handleJumpToLine = useCallback(
     (line: number) => {
       onJumpToLine?.(line);
@@ -153,18 +206,33 @@ function NoteList({
     });
   }, []);
 
+  const visibleNoteIds = useMemo(() => {
+    if (searchQuery) return searchResults.map(n => n.id);
+    if (selectedFolder) return selectedFolderNotes.map(n => n.id);
+    return notes.map(n => n.id);
+  }, [searchQuery, selectedFolder, searchResults, selectedFolderNotes, notes]);
+
   const handleSelectAll = useCallback(() => {
-    if (selectedIds.size === notes.length) {
+    if (visibleNoteIds.length > 0 && visibleNoteIds.every(id => selectedIds.has(id))) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(notes.map(n => n.id)));
+      setSelectedIds(new Set(visibleNoteIds));
     }
-  }, [notes, selectedIds.size]);
+  }, [visibleNoteIds, selectedIds]);
 
   const handleExitSelection = useCallback(() => {
     setSelectionMode(false);
     setSelectedIds(new Set());
   }, []);
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleExitSelection();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectionMode, handleExitSelection]);
 
   const handleEnterSelection = useCallback(() => {
     setSelectionMode(true);
@@ -177,6 +245,53 @@ function NoteList({
       handleExitSelection();
     }
   }, [selectedIds, onBatchDelete, handleExitSelection]);
+
+  const handleBatchMoveRequest = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (selectedIds.size === 0 || !onBatchMoveToFolder) return;
+      const items: ContextMenuItem[] = flattenFoldersForMenu(folderTree).map(
+        ({ folder, depth }) => ({
+          label: depth === 0 ? folder.name : `${"\u3000".repeat(depth)}\u203A ${folder.name}`,
+          onClick: () => {
+            onBatchMoveToFolder(Array.from(selectedIds), folder.id);
+            handleExitSelection();
+          },
+        })
+      );
+      if (items.length === 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      showContextMenu(rect.left, rect.bottom + 4, items);
+    },
+    [selectedIds, folderTree, onBatchMoveToFolder, handleExitSelection, showContextMenu]
+  );
+
+  const buildNoteContextMenu = useCallback(
+    (note: Note): ContextMenuItem[] => {
+      const moveTargets: ContextMenuItem[] = folderTree.map(f => ({
+        label: f.name,
+        onClick: () => onMoveNoteToFolder?.(note.id, f.id),
+      }));
+      const hasFolder = note.folderIds && note.folderIds.length > 0;
+      if (hasFolder) {
+        moveTargets.unshift({
+          label: "根目录（无文件夹）",
+          onClick: () => onMoveNoteToRoot?.(note.id),
+        });
+      }
+      return [
+        { label: "复制笔记", onClick: () => onCopyNote?.(note.id) },
+        { separator: true, label: "" },
+        {
+          label: "移动到",
+          children: moveTargets,
+          disabled: moveTargets.length === 0,
+        },
+        { separator: true, label: "" },
+        { label: "删除", danger: true, onClick: () => onNoteDelete(note.id) },
+      ];
+    },
+    [folderTree, onMoveNoteToFolder, onMoveNoteToRoot, onCopyNote, onNoteDelete]
+  );
 
   return (
     <div
@@ -279,6 +394,51 @@ function NoteList({
 
       <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
+      {activeTab === "notes" && !searchQuery && !selectedFolder && folderTree.length > 0 && (
+        <div className="sidebar-folder-toolbar">
+          <span className="sidebar-folder-toolbar-label">文件夹</span>
+          <div className="sidebar-folder-toolbar-actions">
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              className="sidebar-folder-toolbar-btn"
+              title="全部展开"
+              aria-label="全部展开"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 8h8" />
+                <path d="M8 4v8" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              className="sidebar-folder-toolbar-btn"
+              title="全部折叠"
+              aria-label="全部折叠"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 8h8" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="sidebar-content scrollbar-thin">
         {activeTab === "outline" ? (
           <OutlineView headings={headings} currentLine={0} onJumpToLine={handleJumpToLine} />
@@ -291,7 +451,33 @@ function NoteList({
             selectionMode={selectionMode}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
+            onContextMenu={buildNoteContextMenu}
           />
+        ) : selectedFolder ? (
+          <>
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60">
+              <span className="min-w-0 truncate text-[11px] font-medium text-foreground">
+                文件夹：{selectedFolder.name}
+              </span>
+              <button
+                type="button"
+                onClick={onClearFolderSelection}
+                className="shrink-0 text-[10px] text-primary hover:underline"
+              >
+                显示全部
+              </button>
+            </div>
+            <SearchResults
+              notes={selectedFolderNotes}
+              activeNoteId={activeNoteId}
+              onNoteSelect={onNoteSelect}
+              onNoteDelete={onNoteDelete}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onContextMenu={buildNoteContextMenu}
+            />
+          </>
         ) : (
           <>
             <SortableNoteList
@@ -303,6 +489,7 @@ function NoteList({
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
+              onContextMenu={buildNoteContextMenu}
             />
             <FolderTree
               folders={folderTree}
@@ -314,9 +501,17 @@ function NoteList({
               onCreateFolder={handleCreateFolder}
               onDeleteFolder={handleDeleteFolder}
               onRenameFolder={handleRenameFolder}
+              onMoveNoteToFolder={onMoveNoteToFolder}
+              onMoveNoteToRoot={onMoveNoteToRoot}
+              onReorderFolder={onReorderFolder}
+              onCopyNote={onCopyNote}
+              onReorderNotesInFolder={onReorderNotesInFolder}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
+              allFolders={folderTree}
+              expandedFolders={expandedFolders}
+              onExpandedFoldersChange={onExpandedFoldersChange ?? (() => {})}
             />
             {notes.length === 0 && <EmptyNotes />}
           </>
@@ -336,12 +531,36 @@ function NoteList({
               strokeLinejoin="round"
             >
               <rect x="2" y="2" width="12" height="12" rx="1.5" />
-              {selectedIds.size === notes.length && <path d="M5.5 8.5l2 2 4-4" />}
+              {visibleNoteIds.length > 0 && visibleNoteIds.every(id => selectedIds.has(id)) && (
+                <path d="M5.5 8.5l2 2 4-4" />
+              )}
             </svg>
             <span>全选</span>
           </button>
           <span className="batch-action-count">{selectedIds.size} 已选</span>
           <div className="batch-action-spacer" />
+          {onBatchMoveToFolder && folderTree.length > 0 && (
+            <button
+              onClick={handleBatchMoveRequest}
+              disabled={selectedIds.size === 0}
+              className="batch-action-btn"
+              title="移动到文件夹"
+            >
+              <svg
+                className="w-3 h-3"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M2 5.5A1.5 1.5 0 013.5 4h2.672a.5.5 0 01.353.146L8.06 5.68a.5.5 0 00.353.147H12.5A1.5 1.5 0 0114 7.33v4.17a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" />
+                <path d="M5 10h6M8 7.5v5" />
+              </svg>
+              <span>移动</span>
+            </button>
+          )}
           <button
             onClick={handleBatchDelete}
             disabled={selectedIds.size === 0}
@@ -362,15 +581,50 @@ function NoteList({
           </button>
           <button onClick={handleExitSelection} className="batch-action-btn">
             <span>取消</span>
+            <span className="batch-action-hint">Esc</span>
           </button>
         </div>
       )}
 
-      <div className="sidebar-footer">
-        <span>Auto-save</span>
-        <span className="sidebar-footer-dot" />
-        <span>IndexedDB</span>
-      </div>
+      <button
+        type="button"
+        onClick={onOpenTrash}
+        className="sidebar-footer"
+        style={{ width: "100%", cursor: onOpenTrash ? "pointer" : "default" }}
+        title="查看回收站"
+      >
+        <span className="flex items-center gap-1.5">
+          <svg
+            className="w-3 h-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={1.7}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"
+            />
+          </svg>
+          回收站
+        </span>
+        <span className="flex items-center gap-1.5">
+          {trashCount > 0 && (
+            <span
+              className="inline-flex items-center justify-center min-w-[16px] h-[14px] px-1 rounded-full text-[9px] font-semibold"
+              style={{
+                backgroundColor: "hsl(var(--primary) / 0.15)",
+                color: "hsl(var(--primary))",
+              }}
+            >
+              {trashCount}
+            </span>
+          )}
+          <span className="sidebar-footer-dot" />
+          <span>IndexedDB</span>
+        </span>
+      </button>
     </div>
   );
 }
@@ -386,6 +640,12 @@ export default memo(NoteList, (prevProps, nextProps) => {
     prevProps.searchInputRef === nextProps.searchInputRef &&
     prevProps.currentNoteContent === nextProps.currentNoteContent &&
     prevProps.onBatchDelete === nextProps.onBatchDelete &&
-    prevProps.onBatchMoveToFolder === nextProps.onBatchMoveToFolder
+    prevProps.onBatchMoveToFolder === nextProps.onBatchMoveToFolder &&
+    prevProps.onMoveNoteToFolder === nextProps.onMoveNoteToFolder &&
+    prevProps.onMoveNoteToRoot === nextProps.onMoveNoteToRoot &&
+    prevProps.onCopyNote === nextProps.onCopyNote &&
+    prevProps.onReorderFolder === nextProps.onReorderFolder &&
+    prevProps.trashCount === nextProps.trashCount &&
+    prevProps.onOpenTrash === nextProps.onOpenTrash
   );
 });

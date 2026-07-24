@@ -67,23 +67,27 @@ export function Toolbar({
   return (
     <div className="app-toolbar sticky top-0 z-[9999] flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
-        <button onClick={onToggleSidebar} className="toolbar-icon-btn" title="Toggle Sidebar">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
+        {viewMode !== "home" && (
+          <button onClick={onToggleSidebar} className="toolbar-icon-btn" title="Toggle Sidebar">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        )}
 
-        <h1
+        <button
+          type="button"
           onClick={onGoHome}
           className="toolbar-title text-foreground cursor-pointer hover:text-primary transition-colors"
+          aria-label="返回首页"
         >
           {currentNote ? currentNote.title || "Untitled" : "Workspace"}
-        </h1>
+        </button>
       </div>
 
       <div className="flex items-center gap-1">
@@ -95,6 +99,8 @@ export function Toolbar({
                 viewMode === "home" ? "toolbar-segment-btn--active" : ""
               }`}
               title="Home"
+              aria-label="首页"
+              aria-pressed={viewMode === "home"}
             >
               <svg
                 className="w-4 h-4"
@@ -114,6 +120,8 @@ export function Toolbar({
                 viewMode === "editor" ? "toolbar-segment-btn--active" : ""
               }`}
               title="Editor Only"
+              aria-label="仅编辑器"
+              aria-pressed={viewMode === "editor"}
             >
               <svg
                 className="w-4 h-4"
@@ -137,6 +145,8 @@ export function Toolbar({
                 viewMode === "split" ? "toolbar-segment-btn--active" : ""
               }`}
               title="Split View"
+              aria-label="分屏编辑与预览"
+              aria-pressed={viewMode === "split"}
             >
               <svg
                 className="w-4 h-4"
@@ -161,6 +171,8 @@ export function Toolbar({
                 viewMode === "preview" ? "toolbar-segment-btn--active" : ""
               }`}
               title="Preview Only"
+              aria-label="仅预览"
+              aria-pressed={viewMode === "preview"}
             >
               <svg
                 className="w-4 h-4"
@@ -228,6 +240,8 @@ export function Toolbar({
               onClick={onToggleFocusMode}
               className={`toolbar-icon-btn ${focusMode ? "bg-primary/10 text-primary" : ""}`}
               title="焦点模式 (F8)"
+              aria-label="切换焦点模式"
+              aria-pressed={focusMode}
             >
               <svg
                 className="w-4 h-4"
@@ -249,6 +263,8 @@ export function Toolbar({
               onClick={onToggleTypewriterMode}
               className={`toolbar-icon-btn ${typewriterMode ? "bg-primary/10 text-primary" : ""}`}
               title="打字机模式 (F9)"
+              aria-label="切换打字机模式"
+              aria-pressed={typewriterMode}
             >
               <svg
                 className="w-4 h-4"
@@ -291,7 +307,11 @@ export function Toolbar({
 
         <div className="w-px h-5 bg-border"></div>
 
-        <button onClick={toggleTheme} className="toolbar-icon-btn" title="Toggle Theme">
+        <button
+          onClick={toggleTheme}
+          className="toolbar-icon-btn"
+          title={`当前主题：${theme === "light" ? "浅色" : theme === "dark" ? "深色" : "五彩黑"}`}
+        >
           {theme === "light" ? (
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -301,13 +321,28 @@ export function Toolbar({
                 d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
               />
             </svg>
-          ) : (
+          ) : theme === "dark" ? (
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
                 d="M12 3v1m0 16v1m9-9h-1m-16 0H3m3.222-5.778l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M18.364 5.636l-.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"
+              />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 2a10 10 0 100 20 10 10 0 000-20z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v2M12 16v2M6 12H8M16 12h2M8.05 8.05l1.414 1.414M14.536 14.536l1.414 1.414M8.05 15.95l1.414-1.414M14.536 9.464l1.414-1.414"
               />
             </svg>
           )}

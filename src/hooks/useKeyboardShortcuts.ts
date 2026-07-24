@@ -8,7 +8,13 @@ type KeyboardShortcut = {
   altKey?: boolean;
   handler: () => void;
   preventDefault?: boolean;
+  allowInEditable?: boolean;
 };
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
 
 export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
   const shortcutsRef = useRef(shortcuts);
@@ -25,7 +31,13 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
       const matchesShift = shortcut.shiftKey === undefined || event.shiftKey === shortcut.shiftKey;
       const matchesAlt = shortcut.altKey === undefined || event.altKey === shortcut.altKey;
 
-      if (matchesKey && matchesModifier && matchesShift && matchesAlt) {
+      if (
+        matchesKey &&
+        matchesModifier &&
+        matchesShift &&
+        matchesAlt &&
+        (shortcut.allowInEditable || !isEditableTarget(event.target))
+      ) {
         if (shortcut.preventDefault !== false) {
           event.preventDefault();
         }

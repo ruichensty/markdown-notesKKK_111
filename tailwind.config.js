@@ -45,10 +45,24 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Avenir Next", "Segoe UI", "Helvetica Neue", "sans-serif"],
-        mono: ["JetBrains Mono", "Cascadia Code", "SFMono-Regular", "Consolas", "monospace"],
+        sans: ["var(--font-sans)"],
+        mono: ["var(--font-mono)"],
+        serif: ["var(--font-serif)"],
+      },
+      boxShadow: {
+        "elev-xs": "var(--shadow-xs)",
+        "elev-sm": "var(--shadow-sm)",
+        "elev-md": "var(--shadow-md)",
+        "elev-lg": "var(--shadow-lg)",
+        "elev-xl": "var(--shadow-xl)",
+        primary: "var(--shadow-primary)",
+      },
+      transitionTimingFunction: {
+        spring: "var(--ease-spring)",
+        "out-expo": "var(--ease-out)",
+        "in-expo": "var(--ease-in)",
       },
     },
   },
-  plugins: [],
+  plugins: [require("@tailwindcss/typography")],
 };

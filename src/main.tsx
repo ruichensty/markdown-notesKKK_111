@@ -10,21 +10,10 @@ if (!rootElement) {
   throw new Error("Root element not found!");
 }
 
-migrateFromLocalStorage()
-  .then(() => {
-    const root = createRoot(rootElement);
-    root.render(
-      <StrictMode>
-        <App />
-      </StrictMode>
-    );
-  })
-  .catch(error => {
-    console.error("Failed to initialize storage:", error);
-    const root = createRoot(rootElement);
-    root.render(
-      <StrictMode>
-        <App />
-      </StrictMode>
-    );
-  });
+migrateFromLocalStorage().catch(() => {});
+const root = createRoot(rootElement);
+root.render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);

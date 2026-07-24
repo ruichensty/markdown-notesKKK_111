@@ -2,19 +2,16 @@ import type { Note, Theme } from "@types";
 import {
   migrateFromLocalStorage,
   loadAllData,
+  getAllDataCache,
+  invalidateAllDataCache,
   idbGetNote,
-  idbSaveAllNotes,
   idbSaveNote,
   idbDeleteNote,
   idbGetSetting,
   idbSetSetting,
 } from "./indexedDBStorage";
 
-export { migrateFromLocalStorage };
-
-export async function saveNotes(notes: Note[]): Promise<void> {
-  await idbSaveAllNotes(notes);
-}
+export { migrateFromLocalStorage, getAllDataCache, invalidateAllDataCache };
 
 export async function saveSingleNote(note: Note): Promise<void> {
   await idbSaveNote(note);

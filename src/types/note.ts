@@ -16,6 +16,7 @@ export interface Note {
   folderIds?: string[];
   attachments?: Attachment[];
   order?: number;
+  deletedAt?: number;
 }
 
 export interface NoteFormData {
@@ -31,12 +32,7 @@ export interface Folder {
   createdAt: number;
 }
 
-export interface FolderFormData {
-  name: string;
-  parentId?: string | null;
-}
-
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "black-rainbow";
 
 export type SaveStatus = "saved" | "saving" | "retrying" | "error";
 

@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#05070d" />
+    <title>檐篷字帘 · Awning Curtain</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #05070d;
+      }
+      canvas {
+        display: block;
+        touch-action: none;
+        cursor: crosshair;
+      }
+      .hint {
+        position: fixed;
+        left: 50%;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        color: rgba(210, 224, 255, 0.4);
+        font:
+          12px/1.6 ui-monospace,
+          "SFMono-Regular",
+          Menlo,
+          Consolas,
+          monospace;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        pointer-events: none;
+        user-select: none;
+        white-space: nowrap;
+        text-align: center;
+        text-shadow: 0 0 12px rgba(80, 120, 200, 0.4);
+      }
+      .hint span {
+        display: block;
+        font-size: 10px;
+        opacity: 0.7;
+        margin-top: 4px;
+        letter-spacing: 0.3em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div class="hint">drag through the curtain<span>用鼠标或手指划过字帘</span></div>
+    <script>
+      (function () {
+        const canvas = document.getElementById("c");
+        const ctx = canvas.getContext("2d", { alpha: false });
+
+        let W = 0,
+          H = 0,
+          DPR = 1;
+        let awningY = 84;
+        let facadeH = 16;
+        let strands = [];
+
+        const CHAR_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789◇◇◇※※··.?";
+
+        const CFG = {
+          strandSpacing: 15,
+          segLen: 18,
+          gravity: 0.42,
+          friction: 0.984,
+          iters: 6,
+          letterEvery: 2,
+          mouseRadius: 96,
+          push: 0.95,
+          drag: 0.85,
+        };
+
+        const ptr = {
+          x: -9999,
+          y: -9999,
+          px: -9999,
+          py: -9999,
+          inside: false,
+          has: false,
+        };
+
+        const SPRITE_SIZE = 30;
+        const spriteCache = new Map();
+        function getSprite(ch) {
+          let s = spriteCache.get(ch);
+          if (s) return s;
+          const c = document.createElement("canvas");
+          c.width = SPRITE_SIZE;
+          c.height = SPRITE_SIZE;
+          const g = c.getContext("2d");
+          g.font =
+            '600 14px ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace';
+          g.fillStyle = "#dceaff";
+          g.textAlign = "center";
+          g.textBaseline = "middle";
+          g.shadowColor = "rgba(120,170,255,0.9)";
+          g.shadowBlur = 6;
+          g.fillText(ch, SPRITE_SIZE / 2, SPRITE_SIZE / 2 + 0.5);
+          spriteCache.set(ch, c);
+          return c;
+        }
+
+        function randChar() {
+          return CHAR_POOL[(Math.random() * CHAR_POOL.length) | 0];
+        }
+
+        function Point(x, y, pinned) {
+          this.x = x;
+          this.y = y;
+          this.px = x;
+          this.py = y;
+          this.pinned = pinned;
+          this.ch = randChar();
+        }
+
+        function buildStrands() {
+          const target = CFG.strandSpacing;
+          const n = Math.max(24, Math.round(W / target));
+          const step = W / n;
+          const len = H - awningY + 60;
+          const segs = Math.max(6, Math.ceil(len / CFG.segLen));
+          strands = [];
+          for (let i = 0; i <= n; i++) {
+            const x = i * step + step * 0.5;
+            const pts = [];
+            for (let j = 0; j <= segs; j++) {
+              const py = awningY + j * CFG.segLen;
+              pts.push(new Point(x, py, j === 0));
+            }
+            strands.push({ pts: pts, baseX: x });
+          }
+        }
+
+        function resize() {
+          DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+          W = window.innerWidth;
+          H = window.innerHeight;
+          canvas.width = Math.floor(W * DPR);
+          canvas.height = Math.floor(H * DPR);
+          canvas.style.width = W + "px";
+          canvas.style.height = H + "px";
+          ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          facadeH = 16;
+          awningY = Math.max(74, Math.min(120, Math.round(H * 0.1)));
+          buildStrands();
+        }
+
+        function valancePath() {
+          const top = facadeH;
+          const scallopW = 34;
+          const controlY = 2 * awningY - top;
+          ctx.beginPath();
+          ctx.moveTo(0, top);
+          ctx.lineTo(W, top);
+          for (let x = W; x > 0; x -= scallopW) {
+            const nx = Math.max(0, x - scallopW);
+            ctx.quadraticCurveTo(x - scallopW / 2, controlY, nx, top);
+          }
+          ctx.lineTo(0, top);
+          ctx.closePath();
+        }
+
+        function step() {
+          let mvx = ptr.x - ptr.px;
+          let mvy = ptr.y - ptr.py;
+          const mspeed = Math.hypot(mvx, mvy);
+          const maxV = 42;
+          if (mspeed > maxV) {
+            const k = maxV / mspeed;
+            mvx *= k;
+            mvy *= k;
+          }
+          const usePtr = ptr.has && (ptr.inside || mspeed > 0.4);
+          const R = CFG.mouseRadius;
+          const R2 = R * R;
+          const fr = CFG.friction;
+          const gr = CFG.gravity;
+          const push = CFG.push;
+          const drag = CFG.drag;
+
+          for (let s = 0, sl = strands.length; s < sl; s++) {
+            const pts = strands[s].pts;
+            for (let i = 1, n = pts.length; i < n; i++) {
+              const p = pts[i];
+              if (p.pinned) continue;
+              const vx = (p.x - p.px) * fr;
+              const vy = (p.y - p.py) * fr;
+              p.px = p.x;
+              p.py = p.y;
+              p.x += vx;
+              p.y += vy + gr;
+            }
+            if (usePtr) {
+              for (let i = 1, n = pts.length; i < n; i++) {
+                const p = pts[i];
+                const dx = p.x - ptr.x;
+                const dy = p.y - ptr.y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < R2) {
+                  const d = Math.sqrt(d2) || 0.0001;
+                  const f = 1 - d / R;
+                  const ff = f * f;
+                  const nx = dx / d;
+                  const ny = dy / d;
+                  p.x += nx * ff * push + mvx * ff * drag;
+                  p.y += ny * ff * push + mvy * ff * drag;
+                }
+              }
+            }
+            for (let it = 0; it < CFG.iters; it++) {
+              for (let i = 0, n = pts.length - 1; i < n; i++) {
+                const a = pts[i];
+                const b = pts[i + 1];
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+                const diff = ((dist - CFG.segLen) / dist) * 0.5;
+                const ox = dx * diff;
+                const oy = dy * diff;
+                if (!a.pinned) {
+                  a.x += ox;
+                  a.y += oy;
+                }
+                if (!b.pinned) {
+                  b.x -= ox;
+                  b.y -= oy;
+                }
+              }
+            }
+          }
+
+          ptr.px = ptr.x;
+          ptr.py = ptr.y;
+        }
+
+        function drawBackground() {
+          const g = ctx.createLinearGradient(0, 0, 0, H);
+          g.addColorStop(0, "#0b1322");
+          g.addColorStop(0.45, "#070c17");
+          g.addColorStop(1, "#03050a");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W, H);
+
+          const rg = ctx.createRadialGradient(
+            W * 0.5,
+            awningY * 0.5,
+            8,
+            W * 0.5,
+            awningY * 0.5,
+            Math.max(W, H) * 0.65
+          );
+          rg.addColorStop(0, "rgba(86,124,200,0.12)");
+          rg.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = rg;
+          ctx.fillRect(0, 0, W, H);
+
+          const vg = ctx.createRadialGradient(
+            W * 0.5,
+            H * 0.55,
+            Math.min(W, H) * 0.3,
+            W * 0.5,
+            H * 0.55,
+            Math.max(W, H) * 0.75
+          );
+          vg.addColorStop(0, "rgba(0,0,0,0)");
+          vg.addColorStop(1, "rgba(0,0,0,0.55)");
+          ctx.fillStyle = vg;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        function drawAwning() {
+          const top = facadeH;
+
+          const fg = ctx.createLinearGradient(0, 0, 0, top);
+          fg.addColorStop(0, "#0a1020");
+          fg.addColorStop(1, "#0d1426");
+          ctx.fillStyle = fg;
+          ctx.fillRect(0, 0, W, top);
+
+          ctx.fillStyle = "rgba(130,160,220,0.35)";
+          ctx.fillRect(0, top - 1, W, 1);
+
+          ctx.save();
+          valancePath();
+          ctx.clip();
+
+          ctx.fillStyle = "#0e1525";
+          ctx.fillRect(0, top, W, awningY - top + 8);
+
+          ctx.transform(1, 0, 0.55, 1, 0, 0);
+          const stripeW = 20;
+          for (let x = -H; x < W + H; x += stripeW * 2) {
+            ctx.fillStyle = "#172340";
+            ctx.fillRect(x, top, stripeW, awningY - top + 24);
+          }
+          ctx.restore();
+
+          ctx.save();
+          valancePath();
+          ctx.clip();
+          const sh = ctx.createLinearGradient(0, top, 0, awningY);
+          sh.addColorStop(0, "rgba(255,255,255,0.06)");
+          sh.addColorStop(0.5, "rgba(0,0,0,0)");
+          sh.addColorStop(1, "rgba(0,0,0,0.45)");
+          ctx.fillStyle = sh;
+          ctx.fillRect(0, top, W, awningY - top + 8);
+          ctx.restore();
+
+          ctx.save();
+          valancePath();
+          ctx.strokeStyle = "rgba(150,182,232,0.28)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+
+          ctx.fillStyle = "rgba(170,196,240,0.5)";
+          for (let s = 0; s < strands.length; s += 2) {
+            const x = strands[s].baseX;
+            ctx.beginPath();
+            ctx.arc(x, awningY, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        function draw() {
+          drawBackground();
+          drawAwning();
+
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.lineWidth = 1;
+          ctx.globalCompositeOperation = "lighter";
+
+          ctx.strokeStyle = "rgba(120,152,200,0.16)";
+          ctx.beginPath();
+          for (let s = 0, sl = strands.length; s < sl; s++) {
+            const pts = strands[s].pts;
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1, n = pts.length; i < n; i++) {
+              ctx.lineTo(pts[i].x, pts[i].y);
+            }
+          }
+          ctx.stroke();
+
+          const half = SPRITE_SIZE / 2;
+          const every = CFG.letterEvery;
+          for (let s = 0, sl = strands.length; s < sl; s++) {
+            const pts = strands[s].pts;
+            for (let i = 2, n = pts.length; i < n; i += every) {
+              const p = pts[i];
+              const prev = pts[i - 1];
+              const dx = p.x - prev.x;
+              const dy = p.y - prev.y;
+              const ang = Math.atan2(dy, dx) - Math.PI / 2;
+              const spd = Math.hypot(p.x - p.px, p.y - p.py);
+              let a = 0.5 + Math.min(0.5, spd * 0.07);
+              a *= 1 - Math.min(0.35, (p.y / H) * 0.35);
+              ctx.globalAlpha = a;
+              ctx.save();
+              ctx.translate(p.x, p.y);
+              ctx.rotate(ang);
+              ctx.drawImage(getSprite(p.ch), -half, -half);
+              ctx.restore();
+            }
+          }
+
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = "source-over";
+        }
+
+        let last = performance.now();
+        let acc = 0;
+        const STEP = 1000 / 60;
+        function frame(now) {
+          let dt = now - last;
+          last = now;
+          if (dt > 120) dt = 120;
+          acc += dt;
+          let guard = 0;
+          while (acc >= STEP && guard < 5) {
+            step();
+            acc -= STEP;
+            guard++;
+          }
+          draw();
+          requestAnimationFrame(frame);
+        }
+
+        function seedPtr(x, y) {
+          if (ptr.px < -9000) {
+            ptr.px = x;
+            ptr.py = y;
+          }
+        }
+        window.addEventListener("resize", resize);
+        window.addEventListener("mousemove", function (e) {
+          ptr.x = e.clientX;
+          ptr.y = e.clientY;
+          seedPtr(e.clientX, e.clientY);
+          ptr.has = true;
+          ptr.inside = true;
+        });
+        window.addEventListener("mouseout", function (e) {
+          if (!e.relatedTarget) ptr.inside = false;
+        });
+        canvas.addEventListener(
+          "touchstart",
+          function (e) {
+            const t = e.touches[0];
+            ptr.x = t.clientX;
+            ptr.y = t.clientY;
+            ptr.px = t.clientX;
+            ptr.py = t.clientY;
+            ptr.has = true;
+            ptr.inside = true;
+          },
+          { passive: true }
+        );
+        canvas.addEventListener(
+          "touchmove",
+          function (e) {
+            const t = e.touches[0];
+            ptr.x = t.clientX;
+            ptr.y = t.clientY;
+            ptr.has = true;
+            ptr.inside = true;
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+        canvas.addEventListener("touchend", function () {
+          ptr.inside = false;
+        });
+
+        resize();
+        ptr.px = ptr.x;
+        ptr.py = ptr.y;
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>

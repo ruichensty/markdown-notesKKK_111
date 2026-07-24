@@ -1,5 +1,6 @@
 import { NoteItem } from "./NoteItem";
 import type { Note } from "@types";
+import type { ContextMenuItem } from "./ContextMenu";
 
 interface SearchResultsProps {
   notes: Note[];
@@ -9,6 +10,7 @@ interface SearchResultsProps {
   selectionMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  onContextMenu?: (note: Note) => ContextMenuItem[];
 }
 
 export function SearchResults({
@@ -19,6 +21,7 @@ export function SearchResults({
   selectionMode,
   selectedIds,
   onToggleSelect,
+  onContextMenu,
 }: SearchResultsProps) {
   if (notes.length === 0) {
     return (
@@ -40,6 +43,7 @@ export function SearchResults({
           selectionMode={selectionMode}
           selected={selectedIds?.has(note.id)}
           onToggleSelect={() => onToggleSelect?.(note.id)}
+          onContextMenu={onContextMenu}
         />
       ))}
     </>

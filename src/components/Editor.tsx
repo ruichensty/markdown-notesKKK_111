@@ -7,21 +7,25 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { Note } from "@types";
-import { useDebounce } from "@hooks";
+import { useDebounce, useTypingSound } from "@hooks";
 import { generateId } from "@utils/export";
 import { idbSaveFile } from "@utils/indexedDBStorage";
 import { SearchReplace } from "./SearchReplace";
 import { EditorToolbar } from "./EditorToolbar";
+import { getFontStack } from "../constants/fonts";
 
 interface EditorProps {
   note: Note;
   onUpdate: (id: string, data: { title?: string; content?: string }) => void;
+  onSave?: () => void;
   fontSize?: "sm" | "md" | "lg" | number;
   lineHeight?: number;
+  fontFamily?: "sans" | "serif" | "mono";
   focusMode?: boolean;
   typewriterMode?: boolean;
   autoPair?: boolean;
   isMobile?: boolean;
+  typingSound?: boolean;
   onAttachmentAdd?: (attachment: {
     id: string;
     fileName: string;
@@ -75,12 +79,15 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   {
     note,
     onUpdate,
+    onSave,
     fontSize = "md",
     lineHeight = 1.7,
+    fontFamily = "mono",
     focusMode = false,
     typewriterMode = false,
     autoPair = true,
     isMobile = false,
+    typingSound = false,
     onAttachmentAdd,
   },
   ref
@@ -90,16 +97,27 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const [textColor, setTextColor] = useState("#000000");
   const [showSearch, setShowSearch] = useState(false);
   const [searchReplaceMode, setSearchReplaceMode] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const noteIdRef = useRef(note.id);
+  const contentRef = useRef(content);
+  const { playKey, playEnter, playBackspace } = useTypingSound(typingSound);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
     if (noteIdRef.current !== note.id) {
       noteIdRef.current = note.id;
-      /* eslint-disable react-hooks/set-state-in-effect -- sync local editor draft when switching notes */
-      setTitle(note.title);
-      setContent(note.content);
-      /* eslint-enable react-hooks/set-state-in-effect */
+      setSwitching(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTitle(note.title);
+          setContent(note.content);
+          requestAnimationFrame(() => setSwitching(false));
+        });
+      });
     }
   }, [note.id, note.title, note.content]);
 
@@ -141,6 +159,19 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     setContent(e.target.value);
   }, []);
 
+  const insertImageMarker = useCallback((marker: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const currentContent = contentRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newContent = currentContent.substring(0, start) + marker + currentContent.substring(end);
+    setContent(newContent);
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + marker.length;
+    }, 0);
+  }, []);
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
@@ -152,30 +183,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const reader = new FileReader();
         reader.onload = () => {
           const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, note.id, arrayBuffer, file.name, file.type).then(() => {
-            const marker = `![${file.name}](attachment://${attachmentId})`;
-            const textarea = textareaRef.current;
-            if (!textarea) return;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const newContent = content.substring(0, start) + marker + content.substring(end);
-            setContent(newContent);
-            setTimeout(() => {
-              textarea.selectionStart = textarea.selectionEnd = start + marker.length;
-            }, 0);
-            onAttachmentAdd?.({
-              id: attachmentId,
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: arrayBuffer.byteLength,
-              uploadedAt: Date.now(),
-            });
-          });
+          idbSaveFile(attachmentId, noteIdRef.current, arrayBuffer, file.name, file.type).then(
+            () => {
+              const marker = `![${file.name}](attachment://${attachmentId})`;
+              insertImageMarker(marker);
+              onAttachmentAdd?.({
+                id: attachmentId,
+                fileName: file.name,
+                fileType: file.type,
+                fileSize: arrayBuffer.byteLength,
+                uploadedAt: Date.now(),
+              });
+            }
+          );
         };
         reader.readAsArrayBuffer(file);
       }
     },
-    [content, note.id, onAttachmentAdd]
+    [insertImageMarker, onAttachmentAdd]
   );
 
   const handleDrop = useCallback(
@@ -189,30 +214,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const reader = new FileReader();
         reader.onload = () => {
           const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, note.id, arrayBuffer, file.name, file.type).then(() => {
-            const marker = `![${file.name}](attachment://${attachmentId})`;
-            const textarea = textareaRef.current;
-            if (!textarea) return;
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const newContent = content.substring(0, start) + marker + content.substring(end);
-            setContent(newContent);
-            setTimeout(() => {
-              textarea.selectionStart = textarea.selectionEnd = start + marker.length;
-            }, 0);
-            onAttachmentAdd?.({
-              id: attachmentId,
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: arrayBuffer.byteLength,
-              uploadedAt: Date.now(),
-            });
-          });
+          idbSaveFile(attachmentId, noteIdRef.current, arrayBuffer, file.name, file.type).then(
+            () => {
+              const marker = `![${file.name}](attachment://${attachmentId})`;
+              insertImageMarker(marker);
+              onAttachmentAdd?.({
+                id: attachmentId,
+                fileName: file.name,
+                fileType: file.type,
+                fileSize: arrayBuffer.byteLength,
+                uploadedAt: Date.now(),
+              });
+            }
+          );
         };
         reader.readAsArrayBuffer(file);
       }
     },
-    [content, note.id, onAttachmentAdd]
+    [insertImageMarker, onAttachmentAdd]
   );
 
   const wrapSelection = useCallback(
@@ -226,6 +245,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (typingSound && !e.ctrlKey && !e.metaKey) {
+        if (e.key === "Enter") playEnter();
+        else if (e.key === "Backspace" || e.key === "Delete") playBackspace();
+        else if (e.key.length === 1) playKey();
+      }
+
       const textarea = textareaRef.current;
       if (!textarea) return;
 
@@ -246,6 +271,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         e.stopPropagation();
         setShowSearch(true);
         setSearchReplaceMode(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        onUpdate(note.id, { title, content });
+        requestAnimationFrame(() => onSave?.());
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "h") {
@@ -305,7 +336,19 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
       }
     },
-    [content, autoPair, wrapSelection]
+    [
+      content,
+      autoPair,
+      wrapSelection,
+      typingSound,
+      playKey,
+      playEnter,
+      playBackspace,
+      note.id,
+      onUpdate,
+      title,
+      onSave,
+    ]
   );
 
   const handleBold = useCallback(() => wrapSelection("**", "**", "粗体文字"), [wrapSelection]);
@@ -417,15 +460,21 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     : undefined;
 
   return (
-    <div className="editor-pane flex-1 flex flex-col overflow-hidden">
+    <div
+      className={`editor-pane flex-1 flex flex-col overflow-hidden ${switching ? "editor-pane--switching" : ""}`}
+    >
       <div className="editor-titlebar">
-        <input
-          type="text"
-          value={title}
-          onChange={handleTitleChange}
-          placeholder="Untitled"
-          className="editor-title-input w-full bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/40 text-foreground"
-        />
+        <div className="editor-titlebar-inner">
+          <span className="editor-title-kicker">Writing</span>
+          <input
+            type="text"
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Untitled"
+            aria-label="笔记标题"
+            className="editor-title-input w-full bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/40 text-foreground"
+          />
+        </div>
       </div>
 
       <EditorToolbar
@@ -462,25 +511,28 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       <div className="flex-1 overflow-hidden relative">
         {focusOverlayStyle && <div style={focusOverlayStyle} />}
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={handleContentChange}
-          onKeyDown={handleKeyDown}
-          onKeyUp={scrollToCursorCenter}
-          onClick={scrollToCursorCenter}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          placeholder="Start writing with Markdown..."
-          className="editor-textarea w-full h-full bg-transparent border-none outline-none resize-none focus:ring-0 font-mono text-sm leading-relaxed scrollbar-thin"
-          style={{
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            fontSize: `${resolvedFontSize}px`,
-            lineHeight: lineHeight,
-            position: "relative",
-            zIndex: 2,
-          }}
-        />
+        <div className="editor-writing-surface">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={handleContentChange}
+            onKeyDown={handleKeyDown}
+            onKeyUp={scrollToCursorCenter}
+            onClick={scrollToCursorCenter}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            placeholder="Start writing with Markdown..."
+            aria-label="Markdown 编辑器"
+            className="editor-textarea w-full h-full bg-transparent border-none outline-none resize-none focus:ring-0 text-sm leading-relaxed scrollbar-thin"
+            style={{
+              fontFamily: getFontStack(fontFamily),
+              fontSize: `${resolvedFontSize}px`,
+              lineHeight: lineHeight,
+              position: "relative",
+              zIndex: 2,
+            }}
+          />
+        </div>
       </div>
     </div>
   );

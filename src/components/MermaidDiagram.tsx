@@ -40,7 +40,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
   useEffect(() => {
     if (unsupportedMessage) return;
 
-    if (code === lastCodeRef.current && svg) return;
+    if (code === lastCodeRef.current) return;
     lastCodeRef.current = code;
 
     let cancelled = false;
@@ -67,7 +67,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
     return () => {
       cancelled = true;
     };
-  }, [code, reactId, svg, unsupportedMessage]);
+  }, [code, reactId, unsupportedMessage]);
 
   if (unsupportedMessage || error) {
     return (
