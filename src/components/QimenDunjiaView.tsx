@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 const CENTER = 500;
 
@@ -63,70 +63,73 @@ const fieldMarks = Array.from({ length: 36 }, (_, index) => ({
   angle: index * 10 - 90,
   radius: 535 + (index % 3) * 28,
   size: index % 4 === 0 ? 4 : 2.5,
+  drift: index % 2 === 0 ? 1 : -1,
+  driftRange: 5 + (index % 5) * 2,
+  driftDuration: 11 + (index % 7) * 3,
 }));
 
 const spinLayers = [
   {
     key: "field",
-    acceleration: -0.000002,
-    maxSpeed: 0.018,
-    cruiseSpeed: 0.009,
+    acceleration: -0.000004,
+    maxSpeed: 0.04,
+    cruiseSpeed: 0.022,
     friction: 0.988,
     renderStep: 0.22,
   },
   {
     key: "center",
-    acceleration: 0.000018,
-    maxSpeed: 0.14,
-    cruiseSpeed: 0.12,
+    acceleration: 0.000024,
+    maxSpeed: 0.22,
+    cruiseSpeed: 0.18,
     friction: 0.972,
     renderStep: 0.08,
   },
   {
     key: "earth",
-    acceleration: -0.000006,
-    maxSpeed: 0.05,
-    cruiseSpeed: 0.04,
+    acceleration: -0.000009,
+    maxSpeed: 0.08,
+    cruiseSpeed: 0.064,
     friction: 0.982,
     renderStep: 0.08,
   },
   {
     key: "human",
-    acceleration: 0.00001,
-    maxSpeed: 0.08,
-    cruiseSpeed: 0.07,
+    acceleration: 0.000015,
+    maxSpeed: 0.13,
+    cruiseSpeed: 0.105,
     friction: 0.978,
     renderStep: 0.08,
   },
   {
     key: "heaven",
-    acceleration: -0.000014,
-    maxSpeed: 0.105,
-    cruiseSpeed: 0.085,
+    acceleration: -0.00002,
+    maxSpeed: 0.16,
+    cruiseSpeed: 0.13,
     friction: 0.976,
     renderStep: 0.08,
   },
   {
     key: "spirit",
-    acceleration: 0.000018,
-    maxSpeed: 0.13,
-    cruiseSpeed: 0.105,
+    acceleration: 0.000025,
+    maxSpeed: 0.2,
+    cruiseSpeed: 0.16,
     friction: 0.974,
     renderStep: 0.08,
   },
   {
     key: "subtle",
-    acceleration: -0.000004,
-    maxSpeed: 0.035,
-    cruiseSpeed: 0.018,
+    acceleration: -0.000006,
+    maxSpeed: 0.06,
+    cruiseSpeed: 0.032,
     friction: 0.984,
     renderStep: 0.18,
   },
   {
     key: "mountain",
-    acceleration: 0.000003,
-    maxSpeed: 0.028,
-    cruiseSpeed: 0.014,
+    acceleration: 0.000005,
+    maxSpeed: 0.05,
+    cruiseSpeed: 0.026,
     friction: 0.986,
     renderStep: 0.18,
   },
@@ -303,6 +306,13 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
                   cx={point.x}
                   cy={point.y}
                   r={mark.size}
+                  style={
+                    {
+                      "--drift-direction": mark.drift,
+                      "--drift-range": `${mark.driftRange}px`,
+                      "--drift-duration": `${mark.driftDuration}s`,
+                    } as CSSProperties
+                  }
                 />
               );
             })}

@@ -2,6 +2,55 @@ export const cyberTrigrams = ["坎", "艮", "震", "巽", "离", "坤", "兑", "
 export const cyberGates = ["休门", "生门", "伤门", "杜门", "景门", "死门", "惊门", "开门"];
 export const cyberStars = ["天蓬", "天芮", "天冲", "天辅", "天禽", "天心", "天柱", "天任", "天英"];
 export const cyberSpirits = ["值符", "螣蛇", "太阴", "六合", "白虎", "玄武", "九地", "九天"];
+export const cyberPalaces = [
+  "一坎",
+  "二坤",
+  "三震",
+  "四巽",
+  "五中",
+  "六乾",
+  "七兑",
+  "八艮",
+  "九离",
+];
+export const cyberHeavenStems = [
+  "天甲",
+  "天乙",
+  "天丙",
+  "天丁",
+  "天戊",
+  "天己",
+  "天庚",
+  "天辛",
+  "天壬",
+  "天癸",
+];
+export const cyberEarthStems = [
+  "地甲",
+  "地乙",
+  "地丙",
+  "地丁",
+  "地戊",
+  "地己",
+  "地庚",
+  "地辛",
+  "地壬",
+  "地癸",
+];
+export const cyberBranches = [
+  "子",
+  "丑",
+  "寅",
+  "卯",
+  "辰",
+  "巳",
+  "午",
+  "未",
+  "申",
+  "酉",
+  "戌",
+  "亥",
+];
 export const cyberMountains = [
   "子",
   "癸",
@@ -28,13 +77,84 @@ export const cyberMountains = [
   "亥",
   "壬",
 ];
+export const cyberHexagrams = [
+  "乾为天",
+  "坤为地",
+  "水雷屯",
+  "山水蒙",
+  "水天需",
+  "天水讼",
+  "地水师",
+  "水地比",
+  "风天小畜",
+  "天泽履",
+  "地天泰",
+  "天地否",
+  "天火同人",
+  "火天大有",
+  "地山谦",
+  "雷地豫",
+  "泽雷随",
+  "山风蛊",
+  "地泽临",
+  "风地观",
+  "火雷噬嗑",
+  "山火贲",
+  "山地剥",
+  "地雷复",
+  "天雷无妄",
+  "山天大畜",
+  "山雷颐",
+  "泽风大过",
+  "坎为水",
+  "离为火",
+  "泽山咸",
+  "雷风恒",
+  "天山遁",
+  "雷天大壮",
+  "火地晋",
+  "地火明夷",
+  "风火家人",
+  "火泽睽",
+  "水山蹇",
+  "雷水解",
+  "山泽损",
+  "风雷益",
+  "泽天夬",
+  "天风姤",
+  "泽地萃",
+  "地风升",
+  "泽水困",
+  "水风井",
+  "泽火革",
+  "火风鼎",
+  "震为雷",
+  "艮为山",
+  "风山渐",
+  "雷泽归妹",
+  "雷火丰",
+  "火山旅",
+  "巽为风",
+  "兑为泽",
+  "风水涣",
+  "水泽节",
+  "风泽中孚",
+  "雷山小过",
+  "水火既济",
+  "火水未济",
+];
 
 export interface CyberReadingInput {
   trigramAngle: number;
   gateAngle: number;
   starAngle: number;
   spiritAngle: number;
+  palaceAngle: number;
+  heavenStemAngle: number;
+  earthStemAngle: number;
+  branchAngle: number;
   mountainAngle: number;
+  hexagramAngle: number;
 }
 
 export interface CyberReading {
@@ -42,7 +162,12 @@ export interface CyberReading {
   gate: string;
   star: string;
   spirit: string;
+  palace: string;
+  heavenStem: string;
+  earthStem: string;
+  branch: string;
   mountain: string;
+  hexagram: string;
   code: string;
   summary: string;
   advice: string;
@@ -107,7 +232,12 @@ export function createCyberReading(input: CyberReadingInput): CyberReading {
   const gate = pickByAngle(cyberGates, input.gateAngle);
   const star = pickByAngle(cyberStars, input.starAngle);
   const spirit = pickByAngle(cyberSpirits, input.spiritAngle);
+  const palace = pickByAngle(cyberPalaces, input.palaceAngle);
+  const heavenStem = pickByAngle(cyberHeavenStems, input.heavenStemAngle);
+  const earthStem = pickByAngle(cyberEarthStems, input.earthStemAngle);
+  const branch = pickByAngle(cyberBranches, input.branchAngle);
   const mountain = pickByAngle(cyberMountains, input.mountainAngle);
+  const hexagram = pickByAngle(cyberHexagrams, input.hexagramAngle);
   const meaning = gateMeanings[gate];
 
   return {
@@ -115,9 +245,14 @@ export function createCyberReading(input: CyberReadingInput): CyberReading {
     gate,
     star,
     spirit,
+    palace,
+    heavenStem,
+    earthStem,
+    branch,
     mountain,
-    code: `${trigram}-${gate}-${star}-${spirit}-${mountain}`,
-    summary: `${meaning.summary} ${star}接入，${spirit}校准，方位落在${mountain}。`,
+    hexagram,
+    code: `${hexagram}-${palace}-${trigram}-${gate}-${star}-${spirit}-${mountain}`,
+    summary: `${meaning.summary} ${star}接入，${spirit}校准，${palace}落位，${heavenStem}/${earthStem}交叠，方位落在${mountain}。`,
     advice: meaning.advice,
     risk: meaning.risk,
   };
