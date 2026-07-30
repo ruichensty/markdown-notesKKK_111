@@ -58,15 +58,81 @@ const mountains = [
   "壬",
 ];
 
+const fieldMarks = Array.from({ length: 36 }, (_, index) => ({
+  id: index,
+  angle: index * 10 - 90,
+  radius: 535 + (index % 3) * 28,
+  size: index % 4 === 0 ? 4 : 2.5,
+}));
+
 const spinLayers = [
-  { key: "center", acceleration: 0.000018, maxSpeed: 0.14, friction: 0.972 },
-  { key: "earth", acceleration: -0.000006, maxSpeed: 0.05, friction: 0.982 },
-  { key: "human", acceleration: 0.00001, maxSpeed: 0.08, friction: 0.978 },
-  { key: "heaven", acceleration: -0.000014, maxSpeed: 0.105, friction: 0.976 },
-  { key: "spirit", acceleration: 0.000018, maxSpeed: 0.13, friction: 0.974 },
-  { key: "subtle", acceleration: -0.000004, maxSpeed: 0.035, friction: 0.984 },
-  { key: "mountain", acceleration: 0.000003, maxSpeed: 0.028, friction: 0.986 },
+  {
+    key: "field",
+    acceleration: -0.000002,
+    maxSpeed: 0.018,
+    cruiseSpeed: 0.009,
+    friction: 0.988,
+    renderStep: 0.22,
+  },
+  {
+    key: "center",
+    acceleration: 0.000018,
+    maxSpeed: 0.14,
+    cruiseSpeed: 0.12,
+    friction: 0.972,
+    renderStep: 0.08,
+  },
+  {
+    key: "earth",
+    acceleration: -0.000006,
+    maxSpeed: 0.05,
+    cruiseSpeed: 0.04,
+    friction: 0.982,
+    renderStep: 0.08,
+  },
+  {
+    key: "human",
+    acceleration: 0.00001,
+    maxSpeed: 0.08,
+    cruiseSpeed: 0.07,
+    friction: 0.978,
+    renderStep: 0.08,
+  },
+  {
+    key: "heaven",
+    acceleration: -0.000014,
+    maxSpeed: 0.105,
+    cruiseSpeed: 0.085,
+    friction: 0.976,
+    renderStep: 0.08,
+  },
+  {
+    key: "spirit",
+    acceleration: 0.000018,
+    maxSpeed: 0.13,
+    cruiseSpeed: 0.105,
+    friction: 0.974,
+    renderStep: 0.08,
+  },
+  {
+    key: "subtle",
+    acceleration: -0.000004,
+    maxSpeed: 0.035,
+    cruiseSpeed: 0.018,
+    friction: 0.984,
+    renderStep: 0.18,
+  },
+  {
+    key: "mountain",
+    acceleration: 0.000003,
+    maxSpeed: 0.028,
+    cruiseSpeed: 0.014,
+    friction: 0.986,
+    renderStep: 0.18,
+  },
 ] as const;
+
+const CRUISE_AFTER_MS = 12000;
 
 type SpinLayerKey = (typeof spinLayers)[number]["key"];
 interface QimenDunjiaViewProps {
@@ -94,9 +160,11 @@ function radialLine(angle: number, inner: number, outer: number) {
 
 export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
   const hoverRef = useRef(false);
+  const hoverStartRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const layerRefs = useRef<Record<SpinLayerKey, SVGGElement | null>>({
+    field: null,
     center: null,
     earth: null,
     human: null,
@@ -106,6 +174,7 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     mountain: null,
   });
   const motionRef = useRef<Record<SpinLayerKey, { angle: number; speed: number }>>({
+    field: { angle: 0, speed: 0 },
     center: { angle: 0, speed: 0 },
     earth: { angle: 0, speed: 0 },
     human: { angle: 0, speed: 0 },
@@ -113,6 +182,16 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     spirit: { angle: 0, speed: 0 },
     subtle: { angle: 0, speed: 0 },
     mountain: { angle: 0, speed: 0 },
+  });
+  const renderedAnglesRef = useRef<Record<SpinLayerKey, number>>({
+    field: Number.NaN,
+    center: Number.NaN,
+    earth: Number.NaN,
+    human: Number.NaN,
+    heaven: Number.NaN,
+    spirit: Number.NaN,
+    subtle: Number.NaN,
+    mountain: Number.NaN,
   });
 
   function setLayerRef(key: SpinLayerKey) {
@@ -125,23 +204,31 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     const lastTime = lastTimeRef.current ?? time;
     const delta = Math.min(time - lastTime, 32);
     lastTimeRef.current = time;
+    const hoverElapsed = hoverStartRef.current === null ? 0 : time - hoverStartRef.current;
     let shouldContinue = hoverRef.current;
 
     for (const layer of spinLayers) {
       const motion = motionRef.current[layer.key];
       if (hoverRef.current) {
+        const maxSpeed = hoverElapsed > CRUISE_AFTER_MS ? layer.cruiseSpeed : layer.maxSpeed;
         motion.speed += layer.acceleration * delta;
-        motion.speed = Math.max(-layer.maxSpeed, Math.min(layer.maxSpeed, motion.speed));
+        motion.speed = Math.max(-maxSpeed, Math.min(maxSpeed, motion.speed));
       } else {
         motion.speed *= Math.pow(layer.friction, delta / 16.67);
         if (Math.abs(motion.speed) < 0.0008) motion.speed = 0;
       }
 
       motion.angle = (motion.angle + motion.speed * delta) % 360;
-      layerRefs.current[layer.key]?.setAttribute(
-        "transform",
-        `rotate(${motion.angle} ${CENTER} ${CENTER})`
-      );
+      if (
+        Number.isNaN(renderedAnglesRef.current[layer.key]) ||
+        Math.abs(motion.angle - renderedAnglesRef.current[layer.key]) >= layer.renderStep
+      ) {
+        layerRefs.current[layer.key]?.setAttribute(
+          "transform",
+          `rotate(${motion.angle} ${CENTER} ${CENTER})`
+        );
+        renderedAnglesRef.current[layer.key] = motion.angle;
+      }
       if (motion.speed !== 0) shouldContinue = true;
     }
 
@@ -160,11 +247,13 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
 
   function handlePointerEnter() {
     hoverRef.current = true;
+    hoverStartRef.current = performance.now();
     startAnimation();
   }
 
   function handlePointerLeave() {
     hoverRef.current = false;
+    hoverStartRef.current = null;
     startAnimation();
   }
 
@@ -200,6 +289,40 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
           onPointerLeave={handlePointerLeave}
         >
           <rect width="1000" height="1000" fill="#fff" />
+          <g
+            ref={setLayerRef("field")}
+            className="qimen-layer qimen-field-layer"
+            aria-hidden="true"
+          >
+            {fieldMarks.map(mark => {
+              const point = polar(mark.radius, mark.angle);
+              return (
+                <circle
+                  key={mark.id}
+                  className="qimen-field-mark"
+                  cx={point.x}
+                  cy={point.y}
+                  r={mark.size}
+                />
+              );
+            })}
+            {fieldMarks
+              .filter(mark => mark.id % 3 === 0)
+              .map(mark => {
+                const start = polar(mark.radius - 16, mark.angle);
+                const end = polar(mark.radius + 16, mark.angle + 3);
+                return (
+                  <line
+                    key={`stream-${mark.id}`}
+                    className="qimen-field-stream"
+                    x1={start.x}
+                    y1={start.y}
+                    x2={end.x}
+                    y2={end.y}
+                  />
+                );
+              })}
+          </g>
           <g className="qimen-layer qimen-layer--rings">
             <circle className="qimen-ring-line" cx={CENTER} cy={CENTER} r="110" />
             <circle className="qimen-ring-line" cx={CENTER} cy={CENTER} r="205" />

@@ -28,6 +28,7 @@ import {
   TemplatePicker,
   TrashView,
   QimenDunjiaView,
+  CyberDivinationView,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
@@ -101,9 +102,9 @@ function AppContent() {
   );
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split" | "qimen">(
-    "home"
-  );
+  const [viewMode, setViewMode] = useState<
+    "home" | "editor" | "preview" | "split" | "qimen" | "cyber"
+  >("home");
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -240,7 +241,9 @@ function AppContent() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const handleViewModeChange = (mode: "home" | "editor" | "preview" | "split" | "qimen") => {
+  const handleViewModeChange = (
+    mode: "home" | "editor" | "preview" | "split" | "qimen" | "cyber"
+  ) => {
     if (isMobile && mode === "split") {
       setViewMode("editor");
     } else {
@@ -482,10 +485,14 @@ function AppContent() {
           hidden={settings.focusMode || settings.typewriterMode}
           isMobile={isMobile}
         />
-        {isMobile && sidebarOpen && viewMode !== "home" && viewMode !== "qimen" && (
-          <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-        )}
-        {viewMode !== "home" && viewMode !== "qimen" && (
+        {isMobile &&
+          sidebarOpen &&
+          viewMode !== "home" &&
+          viewMode !== "qimen" &&
+          viewMode !== "cyber" && (
+            <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+          )}
+        {viewMode !== "home" && viewMode !== "qimen" && viewMode !== "cyber" && (
           <div className="workspace-sidebar-frame">
             <NoteList
               notes={notes}
@@ -529,7 +536,7 @@ function AppContent() {
         )}
 
         <div className="content-area flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {viewMode !== "qimen" && (
+          {viewMode !== "qimen" && viewMode !== "cyber" && (
             <Toolbar
               currentNote={currentNote}
               onNewNote={() => {
@@ -557,7 +564,9 @@ function AppContent() {
           )}
 
           <div className="flex-1 flex overflow-hidden relative">
-            {viewMode === "qimen" ? (
+            {viewMode === "cyber" ? (
+              <CyberDivinationView onBack={handleGoHome} onOpenQimen={() => setViewMode("qimen")} />
+            ) : viewMode === "qimen" ? (
               <QimenDunjiaView onBack={handleGoHome} />
             ) : viewMode === "home" ? (
               <HomeView
@@ -575,6 +584,7 @@ function AppContent() {
                 }}
                 layout={settings.homeLayout}
                 onOpenQimen={() => setViewMode("qimen")}
+                onOpenCyber={() => setViewMode("cyber")}
               />
             ) : currentNote ? (
               <div className="flex-1 flex min-w-0">
@@ -643,6 +653,7 @@ function AppContent() {
                 }}
                 layout={settings.homeLayout}
                 onOpenQimen={() => setViewMode("qimen")}
+                onOpenCyber={() => setViewMode("cyber")}
               />
             )}
 

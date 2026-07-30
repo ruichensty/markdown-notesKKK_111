@@ -34,6 +34,7 @@ interface HomeViewProps {
   onNoteSelect?: (id: string) => void;
   layout?: HomeLayout;
   onOpenQimen?: () => void;
+  onOpenCyber?: () => void;
 }
 
 function countWords(text: string): number {
@@ -88,9 +89,11 @@ function NewNoteButton({ onNewNote }: { onNewNote: () => void }) {
 function HomeNavbar({
   onNewNote,
   onOpenQimen,
+  onOpenCyber,
 }: {
   onNewNote: () => void;
   onOpenQimen?: () => void;
+  onOpenCyber?: () => void;
 }) {
   const links = ["Explore", "Collections", "Flows", "Patterns"];
 
@@ -115,6 +118,9 @@ function HomeNavbar({
       <div className="mobbin-home-actions">
         <button type="button" onClick={onOpenQimen} className="mobbin-home-login">
           奇门图
+        </button>
+        <button type="button" onClick={onOpenCyber} className="mobbin-home-login">
+          赛博算卦
         </button>
         <button type="button" onClick={onNewNote} className="mobbin-home-join">
           New note
@@ -248,11 +254,13 @@ const DashboardLayout = memo(function DashboardLayout({
   notes,
   onNoteSelect,
   onOpenQimen,
+  onOpenCyber,
 }: {
   onNewNote: () => void;
   notes: Note[];
   onNoteSelect?: (id: string) => void;
   onOpenQimen?: () => void;
+  onOpenCyber?: () => void;
 }) {
   const stats = useMemo(() => {
     const totalNotes = notes.length;
@@ -269,7 +277,7 @@ const DashboardLayout = memo(function DashboardLayout({
 
   return (
     <div className="mobbin-home-shell relative z-10 w-full max-w-6xl mx-auto px-5 sm:px-8 lg:px-10">
-      <HomeNavbar onNewNote={onNewNote} onOpenQimen={onOpenQimen} />
+      <HomeNavbar onNewNote={onNewNote} onOpenQimen={onOpenQimen} onOpenCyber={onOpenCyber} />
       <div className="mobbin-hero-card mb-5">
         <div>
           <p className="mobbin-eyebrow">Searchable workspace</p>
@@ -551,6 +559,7 @@ export function HomeView({
   onNoteSelect,
   layout = "writer",
   onOpenQimen,
+  onOpenCyber,
 }: HomeViewProps) {
   return (
     <div className="home-view flex-1 flex flex-col bg-background relative overflow-y-auto overflow-x-hidden min-h-0">
@@ -580,6 +589,7 @@ export function HomeView({
                 notes={notes}
                 onNoteSelect={onNoteSelect}
                 onOpenQimen={onOpenQimen}
+                onOpenCyber={onOpenCyber}
               />
             </div>
           )}

@@ -24,3 +24,4 @@ export { TemplateManagement } from "./TemplateManagement";
 export { TemplatePicker } from "./TemplatePicker";
 export { default as TrashView } from "./TrashView";
 export { QimenDunjiaView } from "./QimenDunjiaView";
+export { CyberDivinationView } from "./CyberDivinationView";
