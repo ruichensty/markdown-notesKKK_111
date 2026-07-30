@@ -33,6 +33,7 @@ interface HomeViewProps {
   notes?: Note[];
   onNoteSelect?: (id: string) => void;
   layout?: HomeLayout;
+  onOpenQimen?: () => void;
 }
 
 function countWords(text: string): number {
@@ -81,6 +82,45 @@ function NewNoteButton({ onNewNote }: { onNewNote: () => void }) {
       </svg>
       开始书写
     </button>
+  );
+}
+
+function HomeNavbar({
+  onNewNote,
+  onOpenQimen,
+}: {
+  onNewNote: () => void;
+  onOpenQimen?: () => void;
+}) {
+  const links = ["Explore", "Collections", "Flows", "Patterns"];
+
+  return (
+    <nav className="mobbin-home-nav" aria-label="首页导航">
+      <button type="button" className="mobbin-home-brand" aria-label="Markdown Notes 首页">
+        <span className="mobbin-home-brand-mark">MN</span>
+        <span className="mobbin-home-brand-copy">
+          <span>Markdown Notes</span>
+          <small>Pattern library for thoughts</small>
+        </span>
+      </button>
+
+      <div className="mobbin-home-links" aria-label="笔记分类导航">
+        {links.map(link => (
+          <button key={link} type="button">
+            {link}
+          </button>
+        ))}
+      </div>
+
+      <div className="mobbin-home-actions">
+        <button type="button" onClick={onOpenQimen} className="mobbin-home-login">
+          奇门图
+        </button>
+        <button type="button" onClick={onNewNote} className="mobbin-home-join">
+          New note
+        </button>
+      </div>
+    </nav>
   );
 }
 
@@ -207,10 +247,12 @@ const DashboardLayout = memo(function DashboardLayout({
   onNewNote,
   notes,
   onNoteSelect,
+  onOpenQimen,
 }: {
   onNewNote: () => void;
   notes: Note[];
   onNoteSelect?: (id: string) => void;
+  onOpenQimen?: () => void;
 }) {
   const stats = useMemo(() => {
     const totalNotes = notes.length;
@@ -223,23 +265,35 @@ const DashboardLayout = memo(function DashboardLayout({
     return [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6);
   }, [notes]);
 
+  const patternTags = ["Daily note", "Research", "Ideas", "Meeting", "Writing", "Archive"];
+
   return (
-    <div className="relative z-10 w-full max-w-3xl mx-auto px-6 sm:px-8">
-      <div className="mb-8 text-center sm:text-left">
-        <h1 className="text-2xl font-semibold text-foreground tracking-tight">工作台</h1>
-        <p className="mt-1 text-sm text-muted-foreground/70">你的写作概览</p>
+    <div className="mobbin-home-shell relative z-10 w-full max-w-6xl mx-auto px-5 sm:px-8 lg:px-10">
+      <HomeNavbar onNewNote={onNewNote} onOpenQimen={onOpenQimen} />
+      <div className="mobbin-hero-card mb-5">
+        <div>
+          <p className="mobbin-eyebrow">Searchable workspace</p>
+          <h1 className="mobbin-hero-title">像浏览设计案例一样，快速回到你的笔记流。</h1>
+          <p className="mobbin-hero-subtitle">
+            收集、筛选、继续书写，把灵感整理成可复用的知识屏幕。
+          </p>
+        </div>
+        <NewNoteButton onNewNote={onNewNote} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="mobbin-pattern-strip mb-5" aria-label="常用笔记模式">
+        {patternTags.map(tag => (
+          <span key={tag}>{tag}</span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         {[
           { label: "笔记总数", value: stats.totalNotes, icon: "notes" },
           { label: "累计字数", value: stats.totalWords.toLocaleString(), icon: "words" },
           { label: "本周更新", value: stats.weekCount, icon: "week" },
         ].map(s => (
-          <div
-            key={s.label}
-            className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 transition-all hover:border-primary/25 hover:bg-card/70 hover:-translate-y-0.5 hover:shadow-sm"
-          >
+          <div key={s.label} className="mobbin-stat-card">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
                 {s.label}
@@ -291,12 +345,11 @@ const DashboardLayout = memo(function DashboardLayout({
         ))}
       </div>
 
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">最近笔记</h2>
-          <p className="text-[11px] text-muted-foreground/50 mt-0.5">按更新时间排序</p>
+          <p className="mobbin-eyebrow">Latest screens</p>
+          <h2 className="text-xl font-semibold text-foreground tracking-tight">最近笔记</h2>
         </div>
-        <NewNoteButton onNewNote={onNewNote} />
       </div>
 
       {recent.length === 0 ? (
@@ -320,12 +373,12 @@ const DashboardLayout = memo(function DashboardLayout({
           <p className="text-xs text-muted-foreground/50 mt-1">创建第一篇笔记开始记录吧</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="mobbin-note-grid">
           {recent.map(note => (
             <button
               key={note.id}
               onClick={() => onNoteSelect?.(note.id)}
-              className="group flex flex-col gap-2 rounded-2xl border border-border/50 bg-card/40 p-4 text-left transition-all hover:border-primary/30 hover:bg-card/70 hover:-translate-y-0.5 hover:shadow-sm"
+              className="mobbin-note-card group"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-foreground truncate">
@@ -361,71 +414,6 @@ const DashboardLayout = memo(function DashboardLayout({
     </div>
   );
 });
-
-function PixelCursor({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="28"
-      viewBox="0 0 24 28"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <rect x="0" y="0" width="4" height="4" />
-      <rect x="4" y="0" width="4" height="4" />
-      <rect x="0" y="4" width="4" height="4" />
-      <rect x="0" y="8" width="4" height="4" />
-      <rect x="4" y="8" width="4" height="4" />
-      <rect x="8" y="8" width="4" height="4" />
-      <rect x="0" y="12" width="4" height="4" />
-      <rect x="4" y="12" width="4" height="4" />
-      <rect x="8" y="12" width="4" height="4" />
-      <rect x="12" y="12" width="4" height="4" />
-      <rect x="0" y="16" width="4" height="4" />
-      <rect x="4" y="16" width="4" height="4" />
-      <rect x="8" y="16" width="4" height="4" />
-      <rect x="12" y="16" width="4" height="4" />
-      <rect x="16" y="16" width="4" height="4" />
-      <rect x="8" y="20" width="4" height="4" />
-      <rect x="12" y="20" width="4" height="4" />
-      <rect x="16" y="20" width="4" height="4" />
-      <rect x="20" y="20" width="4" height="4" />
-      <rect x="16" y="24" width="4" height="4" />
-      <rect x="20" y="24" width="4" height="4" />
-    </svg>
-  );
-}
-
-function PixelNoteIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="20"
-      height="24"
-      viewBox="0 0 20 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <rect x="2" y="2" width="16" height="20" rx="1" />
-      <path d="M6 7h8M6 12h8M6 17h5" />
-      <path d="M13 2v6h6" fill="currentColor" fillOpacity="0.15" />
-    </svg>
-  );
-}
-
-function PixelStar({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-      <rect x="6" y="0" width="4" height="4" />
-      <rect x="4" y="4" width="8" height="4" />
-      <rect x="0" y="6" width="16" height="4" />
-      <rect x="4" y="8" width="8" height="4" />
-      <rect x="6" y="12" width="4" height="4" />
-    </svg>
-  );
-}
 
 function WriterLayout({
   onNewNote,
@@ -562,6 +550,7 @@ export function HomeView({
   notes = [],
   onNoteSelect,
   layout = "writer",
+  onOpenQimen,
 }: HomeViewProps) {
   return (
     <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
@@ -586,7 +575,12 @@ export function HomeView({
           )}
           {layout === "dashboard" && (
             <div className="flex-1 flex items-center justify-center py-12">
-              <DashboardLayout onNewNote={onNewNote} notes={notes} onNoteSelect={onNoteSelect} />
+              <DashboardLayout
+                onNewNote={onNewNote}
+                notes={notes}
+                onNoteSelect={onNoteSelect}
+                onOpenQimen={onOpenQimen}
+              />
             </div>
           )}
           {layout === "writer" && (

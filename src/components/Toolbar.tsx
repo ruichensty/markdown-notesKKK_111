@@ -86,7 +86,13 @@ export function Toolbar({
           className="toolbar-title text-foreground cursor-pointer hover:text-primary transition-colors"
           aria-label="返回首页"
         >
-          {currentNote ? currentNote.title || "Untitled" : "Workspace"}
+          <span className="toolbar-title-mark">MN</span>
+          <span className="toolbar-title-copy">
+            <span className="toolbar-title-label">Markdown Notes</span>
+            <span className="toolbar-title-current">
+              {currentNote ? currentNote.title || "Untitled" : "Workspace"}
+            </span>
+          </span>
         </button>
       </div>
 

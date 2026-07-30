@@ -311,6 +311,19 @@ function NoteList({
         </div>
       </div>
 
+      <div className="sidebar-library-summary" aria-label="文件库概览">
+        <div>
+          <span className="sidebar-library-summary-label">Library</span>
+          <strong>{notes.length}</strong>
+          <small>screens saved</small>
+        </div>
+        <div>
+          <span className="sidebar-library-summary-label">Collections</span>
+          <strong>{folders.length}</strong>
+          <small>folders</small>
+        </div>
+      </div>
+
       <div className="sidebar-search">
         <svg
           className="sidebar-search-icon"

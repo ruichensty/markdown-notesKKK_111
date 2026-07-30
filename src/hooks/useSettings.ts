@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS: Settings = {
   reminderInterval: 60,
   accentColor: "indigo",
   fontFamily: "mono",
-  homeLayout: "writer",
+  homeLayout: "dashboard",
   expandedFolders: [],
 };
 

@@ -84,6 +84,10 @@ function NoteItem({
   const title = note.title || "Untitled";
   const time = note.createdAt ? formatTime(note.createdAt) : "";
   const recency = recencyClass(note.updatedAt);
+  const preview = (note.content || "")
+    .replace(/[#*`>\-[\]()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return (
     <div
@@ -142,8 +146,11 @@ function NoteItem({
           <line x1="6" y1="9" x2="10" y2="9" />
           <line x1="6" y1="11" x2="9" y2="11" />
         </svg>
-        <span className={`sidebar-item-text ${isActive ? "text-primary" : "text-foreground/85"}`}>
-          {title}
+        <span className="sidebar-item-copy">
+          <span className={`sidebar-item-text ${isActive ? "text-primary" : "text-foreground/85"}`}>
+            {title}
+          </span>
+          <span className="sidebar-item-preview">{preview || "Blank note"}</span>
         </span>
         {time && <span className="sidebar-item-time">{time}</span>}
       </button>

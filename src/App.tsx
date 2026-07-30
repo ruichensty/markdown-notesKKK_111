@@ -27,6 +27,7 @@ import {
   CommandPalette,
   TemplatePicker,
   TrashView,
+  QimenDunjiaView,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
@@ -100,7 +101,9 @@ function AppContent() {
   );
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split">("home");
+  const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split" | "qimen">(
+    "home"
+  );
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -237,7 +240,7 @@ function AppContent() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  const handleViewModeChange = (mode: "home" | "editor" | "preview" | "split") => {
+  const handleViewModeChange = (mode: "home" | "editor" | "preview" | "split" | "qimen") => {
     if (isMobile && mode === "split") {
       setViewMode("editor");
     } else {
@@ -259,7 +262,11 @@ function AppContent() {
   const handleGoHome = () => {
     setCurrentNoteId(null);
     setViewMode("home");
-    if (settings.homeLayout === "writer" || settings.homeLayout === "curtain") {
+    if (
+      settings.homeLayout === "writer" ||
+      settings.homeLayout === "curtain" ||
+      settings.homeLayout === "dashboard"
+    ) {
       setSidebarOpen(false);
     }
   };
@@ -475,78 +482,84 @@ function AppContent() {
           hidden={settings.focusMode || settings.typewriterMode}
           isMobile={isMobile}
         />
-        {isMobile && sidebarOpen && viewMode !== "home" && (
+        {isMobile && sidebarOpen && viewMode !== "home" && viewMode !== "qimen" && (
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}
-        {viewMode !== "home" && (
-          <NoteList
-            notes={notes}
-            activeNoteId={currentNoteId}
-            onNoteSelect={id => {
-              handleNoteSelect(id);
-              setViewMode(isMobile ? "editor" : "split");
-            }}
-            onNewNote={() => {
-              if (templates.length > 0) {
-                setShowTemplatePicker(true);
-              } else {
-                handleNewNote();
-              }
-            }}
-            onNoteDelete={handleNoteDelete}
-            onRemoveFolderFromNotes={handleRemoveFolderFromNotes}
-            onReorderNotes={reorderNotes}
-            onReorderNotesInFolder={reorderNotesInFolder}
-            expandedFolders={settings.expandedFolders}
-            onExpandedFoldersChange={ids => updateSettings({ expandedFolders: ids })}
-            onBatchMoveToFolder={handleBatchMoveToFolder}
-            searchInputRef={searchInputRef}
-            getFormattedDate={getFormattedDate}
-            sidebarWidth={settings.sidebarWidth}
-            collapsed={!sidebarOpen}
-            currentNoteContent={currentNote?.content}
-            onJumpToLine={handleJumpToLine}
-            isMobile={isMobile}
-            onBatchDelete={handleBatchDelete}
-            onMoveNoteToFolder={handleMoveNoteToFolder}
-            onMoveNoteToRoot={handleMoveNoteToRoot}
-            onCopyNote={handleCopyNote}
-            onReorderFolder={handleReorderFolder}
-            trashCount={trashedNotes.length}
-            onOpenTrash={() => setShowTrash(true)}
-            selectedFolderId={selectedFolderId}
-            onClearFolderSelection={() => setSelectedFolderId(null)}
-          />
+        {viewMode !== "home" && viewMode !== "qimen" && (
+          <div className="workspace-sidebar-frame">
+            <NoteList
+              notes={notes}
+              activeNoteId={currentNoteId}
+              onNoteSelect={id => {
+                handleNoteSelect(id);
+                setViewMode(isMobile ? "editor" : "split");
+              }}
+              onNewNote={() => {
+                if (templates.length > 0) {
+                  setShowTemplatePicker(true);
+                } else {
+                  handleNewNote();
+                }
+              }}
+              onNoteDelete={handleNoteDelete}
+              onRemoveFolderFromNotes={handleRemoveFolderFromNotes}
+              onReorderNotes={reorderNotes}
+              onReorderNotesInFolder={reorderNotesInFolder}
+              expandedFolders={settings.expandedFolders}
+              onExpandedFoldersChange={ids => updateSettings({ expandedFolders: ids })}
+              onBatchMoveToFolder={handleBatchMoveToFolder}
+              searchInputRef={searchInputRef}
+              getFormattedDate={getFormattedDate}
+              sidebarWidth={settings.sidebarWidth}
+              collapsed={!sidebarOpen}
+              currentNoteContent={currentNote?.content}
+              onJumpToLine={handleJumpToLine}
+              isMobile={isMobile}
+              onBatchDelete={handleBatchDelete}
+              onMoveNoteToFolder={handleMoveNoteToFolder}
+              onMoveNoteToRoot={handleMoveNoteToRoot}
+              onCopyNote={handleCopyNote}
+              onReorderFolder={handleReorderFolder}
+              trashCount={trashedNotes.length}
+              onOpenTrash={() => setShowTrash(true)}
+              selectedFolderId={selectedFolderId}
+              onClearFolderSelection={() => setSelectedFolderId(null)}
+            />
+          </div>
         )}
 
         <div className="content-area flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          <Toolbar
-            currentNote={currentNote}
-            onNewNote={() => {
-              if (templates.length > 0) {
-                setShowTemplatePicker(true);
-              } else {
-                handleNewNote();
+          {viewMode !== "qimen" && (
+            <Toolbar
+              currentNote={currentNote}
+              onNewNote={() => {
+                if (templates.length > 0) {
+                  setShowTemplatePicker(true);
+                } else {
+                  handleNewNote();
+                }
+              }}
+              showExportMenu={showExportMenu}
+              onToggleExportMenu={handleExportMenuToggle}
+              onToggleSidebar={handleToggleSidebar}
+              viewMode={viewMode}
+              onViewModeChange={handleViewModeChange}
+              onToggleSettings={handleToggleSettings}
+              onGoHome={handleGoHome}
+              focusMode={settings.focusMode}
+              typewriterMode={settings.typewriterMode}
+              onToggleFocusMode={() => updateSettings({ focusMode: !settings.focusMode })}
+              onToggleTypewriterMode={() =>
+                updateSettings({ typewriterMode: !settings.typewriterMode })
               }
-            }}
-            showExportMenu={showExportMenu}
-            onToggleExportMenu={handleExportMenuToggle}
-            onToggleSidebar={handleToggleSidebar}
-            viewMode={viewMode}
-            onViewModeChange={handleViewModeChange}
-            onToggleSettings={handleToggleSettings}
-            onGoHome={handleGoHome}
-            focusMode={settings.focusMode}
-            typewriterMode={settings.typewriterMode}
-            onToggleFocusMode={() => updateSettings({ focusMode: !settings.focusMode })}
-            onToggleTypewriterMode={() =>
-              updateSettings({ typewriterMode: !settings.typewriterMode })
-            }
-            isMobile={isMobile}
-          />
+              isMobile={isMobile}
+            />
+          )}
 
           <div className="flex-1 flex overflow-hidden relative">
-            {viewMode === "home" ? (
+            {viewMode === "qimen" ? (
+              <QimenDunjiaView onBack={handleGoHome} />
+            ) : viewMode === "home" ? (
               <HomeView
                 onNewNote={() => {
                   if (templates.length > 0) {
@@ -561,6 +574,7 @@ function AppContent() {
                   setViewMode(isMobile ? "editor" : "split");
                 }}
                 layout={settings.homeLayout}
+                onOpenQimen={() => setViewMode("qimen")}
               />
             ) : currentNote ? (
               <div className="flex-1 flex min-w-0">
@@ -628,6 +642,7 @@ function AppContent() {
                   setViewMode(isMobile ? "editor" : "split");
                 }}
                 layout={settings.homeLayout}
+                onOpenQimen={() => setViewMode("qimen")}
               />
             )}
 
