@@ -946,6 +946,18 @@
   gap: 6px;
 }
 
+.home-view {
+  scrollbar-gutter: stable;
+}
+
+.home-layout-frame {
+  min-height: 100%;
+}
+
+.home-layout-frame--dashboard {
+  min-height: max-content;
+}
+
 .qimen-page {
   position: relative;
   min-height: 100%;

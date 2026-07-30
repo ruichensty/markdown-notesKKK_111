@@ -553,7 +553,7 @@ export function HomeView({
   onOpenQimen,
 }: HomeViewProps) {
   return (
-    <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+    <div className="home-view flex-1 flex flex-col bg-background relative overflow-y-auto overflow-x-hidden min-h-0">
       {layout === "curtain" ? (
         <AwningCurtain onNewNote={onNewNote} />
       ) : (
@@ -564,17 +564,17 @@ export function HomeView({
           </div>
 
           {layout === "quotes" && (
-            <div className="flex-1 flex items-center justify-center py-12">
+            <div className="home-layout-frame flex-1 flex items-center justify-center py-12">
               <QuoteLayout onNewNote={onNewNote} />
             </div>
           )}
           {layout === "minimal" && (
-            <div className="flex-1 flex items-center justify-center py-12">
+            <div className="home-layout-frame flex-1 flex items-center justify-center py-12">
               <MinimalLayout onNewNote={onNewNote} />
             </div>
           )}
           {layout === "dashboard" && (
-            <div className="flex-1 flex items-center justify-center py-12">
+            <div className="home-layout-frame home-layout-frame--dashboard flex-1 flex items-start justify-center py-8 sm:py-12">
               <DashboardLayout
                 onNewNote={onNewNote}
                 notes={notes}
