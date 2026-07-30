@@ -201,14 +201,22 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
           奇门图
         </button>
       </header>
+      <p className="oracle-disclaimer">
+        提示：赛博算卦仅供娱乐和灵感参考，不作为决策、预测或专业建议依据。
+      </p>
 
       <main className="cyber-layout">
         <section className="cyber-oracle">
           <div
             className={`cyber-oracle-stage ${phase === "locking" ? "cyber-oracle-stage--locking" : ""}`}
           >
-            <svg className="cyber-svg" viewBox="0 0 1000 1000" role="img" aria-label="赛博算卦图">
-              <rect width="1000" height="1000" fill="#fff" />
+            <svg
+              className="cyber-svg"
+              viewBox="-90 -90 1180 1180"
+              role="img"
+              aria-label="赛博算卦图"
+            >
+              <rect x="-90" y="-90" width="1180" height="1180" fill="#fff" />
               <g className="cyber-grid" aria-hidden="true">
                 {Array.from({ length: 9 }, (_, index) => 100 + index * 100).map(value => (
                   <line key={`v-${value}`} x1={value} y1="70" x2={value} y2="930" />

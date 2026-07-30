@@ -1792,6 +1792,20 @@
   margin-bottom: 16px;
 }
 
+.oracle-disclaimer {
+  max-width: 720px;
+  margin: -4px auto 18px;
+  border: 2px solid #000;
+  background: #fff;
+  padding: 10px 14px;
+  color: #000;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .qimen-page--minimal .qimen-back-btn,
 .qimen-page--minimal .qimen-date-card {
   border: 2px solid #000;
@@ -1967,10 +1981,11 @@
 
 .cyber-svg {
   display: block;
-  width: min(78vmin, 760px);
-  height: min(78vmin, 760px);
+  width: min(82vmin, 800px);
+  height: min(82vmin, 800px);
   background: #fff;
   cursor: crosshair;
+  overflow: visible;
   user-select: none;
   touch-action: none;
 }

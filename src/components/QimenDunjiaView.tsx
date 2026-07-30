@@ -281,6 +281,9 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
           <strong>分层异速</strong>
         </div>
       </header>
+      <p className="oracle-disclaimer">
+        提示：本页面仅供娱乐和视觉交互体验，不作为决策、预测或专业建议依据。
+      </p>
 
       <main className="qimen-layout qimen-layout--minimal">
         <svg
