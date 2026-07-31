@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   createCyberReading,
   cyberBranches,
@@ -15,6 +15,15 @@ import {
 } from "@utils/qimenReading";
 
 const CENTER = 500;
+
+const dataBits = Array.from({ length: 48 }, (_, index) => ({
+  id: index,
+  label: index % 5 === 0 ? "01" : index % 3 === 0 ? "10" : index % 2 === 0 ? "0" : "1",
+  angle: index * 7.5 - 90,
+  radius: 555 + (index % 4) * 24,
+  drift: index % 2 === 0 ? 1 : -1,
+  delay: `${(index % 12) * 0.08}s`,
+}));
 
 const cyberLayers = [
   { key: "core", acceleration: 0.00002, maxSpeed: 0.12, lockFriction: 0.9 },
@@ -49,6 +58,14 @@ function polar(radius: number, angle: number) {
 function rotateText(angle: number, radius: number) {
   const point = polar(radius, angle);
   return `translate(${point.x} ${point.y}) rotate(${angle + 90})`;
+}
+
+function createOracleId(reading: CyberReading) {
+  let hash = 0;
+  for (const char of reading.code) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 0xfffff;
+  }
+  return `QMDJ-${hash.toString(16).toUpperCase().padStart(5, "0")}`;
 }
 
 export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationViewProps) {
@@ -206,7 +223,7 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
       </p>
 
       <main className="cyber-layout">
-        <section className="cyber-oracle">
+        <section className={`cyber-oracle cyber-oracle--${phase}`}>
           <div
             className={`cyber-oracle-stage ${phase === "locking" ? "cyber-oracle-stage--locking" : ""}`}
           >
@@ -217,6 +234,26 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
               aria-label="赛博算卦图"
             >
               <rect x="-90" y="-90" width="1180" height="1180" fill="#fff" />
+              <g className="cyber-data-field" aria-hidden="true">
+                {dataBits.map(bit => {
+                  const point = polar(bit.radius, bit.angle);
+                  return (
+                    <text
+                      key={bit.id}
+                      x={point.x}
+                      y={point.y}
+                      style={
+                        {
+                          "--bit-drift": bit.drift,
+                          "--bit-delay": bit.delay,
+                        } as CSSProperties
+                      }
+                    >
+                      {bit.label}
+                    </text>
+                  );
+                })}
+              </g>
               <g className="cyber-grid" aria-hidden="true">
                 {Array.from({ length: 9 }, (_, index) => 100 + index * 100).map(value => (
                   <line key={`v-${value}`} x1={value} y1="70" x2={value} y2="930" />
@@ -385,6 +422,11 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
                 </div>
               </div>
             )}
+            <div className="cyber-reticle" aria-hidden="true">
+              <span className="cyber-reticle-line cyber-reticle-line--x" />
+              <span className="cyber-reticle-line cyber-reticle-line--y" />
+              <span className="cyber-reticle-ring" />
+            </div>
           </div>
 
           <button
@@ -400,7 +442,15 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
           <div className="cyber-panel-label">Oracle Output</div>
           {reading ? (
             <>
+              <div className="cyber-oracle-id">ORACLE-ID: {createOracleId(reading)}</div>
               <div className="cyber-code">{reading.code}</div>
+              <div className="cyber-terminal-lines" aria-label="锁定序列">
+                <span>&gt; FIELD CAPTURED</span>
+                <span>&gt; GATE: {reading.gate}</span>
+                <span>&gt; STAR: {reading.star}</span>
+                <span>&gt; HEXAGRAM: {reading.hexagram}</span>
+                <span>&gt; RESULT LOCKED</span>
+              </div>
               <dl className="cyber-reading-grid">
                 <div>
                   <dt>卦象</dt>
