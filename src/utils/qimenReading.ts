@@ -143,6 +143,98 @@ export const cyberHexagrams = [
   "水火既济",
   "火水未济",
 ];
+export const cyberMansions = [
+  "角",
+  "亢",
+  "氐",
+  "房",
+  "心",
+  "尾",
+  "箕",
+  "斗",
+  "牛",
+  "女",
+  "虚",
+  "危",
+  "室",
+  "壁",
+  "奎",
+  "娄",
+  "胃",
+  "昴",
+  "毕",
+  "觜",
+  "参",
+  "井",
+  "鬼",
+  "柳",
+  "星",
+  "张",
+  "翼",
+  "轸",
+];
+export const cyberJiazi = [
+  "甲子",
+  "乙丑",
+  "丙寅",
+  "丁卯",
+  "戊辰",
+  "己巳",
+  "庚午",
+  "辛未",
+  "壬申",
+  "癸酉",
+  "甲戌",
+  "乙亥",
+  "丙子",
+  "丁丑",
+  "戊寅",
+  "己卯",
+  "庚辰",
+  "辛巳",
+  "壬午",
+  "癸未",
+  "甲申",
+  "乙酉",
+  "丙戌",
+  "丁亥",
+  "戊子",
+  "己丑",
+  "庚寅",
+  "辛卯",
+  "壬辰",
+  "癸巳",
+  "甲午",
+  "乙未",
+  "丙申",
+  "丁酉",
+  "戊戌",
+  "己亥",
+  "庚子",
+  "辛丑",
+  "壬寅",
+  "癸卯",
+  "甲辰",
+  "乙巳",
+  "丙午",
+  "丁未",
+  "戊申",
+  "己酉",
+  "庚戌",
+  "辛亥",
+  "壬子",
+  "癸丑",
+  "甲寅",
+  "乙卯",
+  "丙辰",
+  "丁巳",
+  "戊午",
+  "己未",
+  "庚申",
+  "辛酉",
+  "壬戌",
+  "癸亥",
+];
 
 export interface CyberReadingInput {
   trigramAngle: number;
@@ -155,6 +247,8 @@ export interface CyberReadingInput {
   branchAngle: number;
   mountainAngle: number;
   hexagramAngle: number;
+  mansionAngle: number;
+  jiaziAngle: number;
 }
 
 export interface CyberReading {
@@ -168,6 +262,8 @@ export interface CyberReading {
   branch: string;
   mountain: string;
   hexagram: string;
+  mansion: string;
+  jiazi: string;
   code: string;
   summary: string;
   advice: string;
@@ -238,6 +334,8 @@ export function createCyberReading(input: CyberReadingInput): CyberReading {
   const branch = pickByAngle(cyberBranches, input.branchAngle);
   const mountain = pickByAngle(cyberMountains, input.mountainAngle);
   const hexagram = pickByAngle(cyberHexagrams, input.hexagramAngle);
+  const mansion = pickByAngle(cyberMansions, input.mansionAngle);
+  const jiazi = pickByAngle(cyberJiazi, input.jiaziAngle);
   const meaning = gateMeanings[gate];
 
   return {
@@ -251,8 +349,10 @@ export function createCyberReading(input: CyberReadingInput): CyberReading {
     branch,
     mountain,
     hexagram,
-    code: `${hexagram}-${palace}-${trigram}-${gate}-${star}-${spirit}-${mountain}`,
-    summary: `${meaning.summary} ${star}接入，${spirit}校准，${palace}落位，${heavenStem}/${earthStem}交叠，方位落在${mountain}。`,
+    mansion,
+    jiazi,
+    code: `${hexagram}-${palace}-${trigram}-${gate}-${star}-${spirit}-${mountain}-${mansion}-${jiazi}`,
+    summary: `${meaning.summary} ${star}接入，${spirit}校准，${palace}落位，${heavenStem}/${earthStem}交叠，方位落在${mountain}，宿曜锁定${mansion}，甲子序列为${jiazi}。`,
     advice: meaning.advice,
     risk: meaning.risk,
   };

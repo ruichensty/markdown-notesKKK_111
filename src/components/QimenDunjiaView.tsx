@@ -1,4 +1,9 @@
 import { useEffect, useRef, type CSSProperties } from "react";
+import {
+  cyberHexagrams as hexagrams,
+  cyberJiazi as jiazi,
+  cyberMansions as mansions,
+} from "@utils/qimenReading";
 
 const CENTER = 500;
 
@@ -133,6 +138,30 @@ const spinLayers = [
     friction: 0.986,
     renderStep: 0.18,
   },
+  {
+    key: "hexagram",
+    acceleration: -0.000003,
+    maxSpeed: 0.032,
+    cruiseSpeed: 0.016,
+    friction: 0.988,
+    renderStep: 0.22,
+  },
+  {
+    key: "mansion",
+    acceleration: 0.000004,
+    maxSpeed: 0.038,
+    cruiseSpeed: 0.02,
+    friction: 0.987,
+    renderStep: 0.2,
+  },
+  {
+    key: "jiazi",
+    acceleration: -0.000002,
+    maxSpeed: 0.024,
+    cruiseSpeed: 0.012,
+    friction: 0.989,
+    renderStep: 0.26,
+  },
 ] as const;
 
 const CRUISE_AFTER_MS = 12000;
@@ -175,6 +204,9 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     spirit: null,
     subtle: null,
     mountain: null,
+    hexagram: null,
+    mansion: null,
+    jiazi: null,
   });
   const motionRef = useRef<Record<SpinLayerKey, { angle: number; speed: number }>>({
     field: { angle: 0, speed: 0 },
@@ -185,6 +217,9 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     spirit: { angle: 0, speed: 0 },
     subtle: { angle: 0, speed: 0 },
     mountain: { angle: 0, speed: 0 },
+    hexagram: { angle: 0, speed: 0 },
+    mansion: { angle: 0, speed: 0 },
+    jiazi: { angle: 0, speed: 0 },
   });
   const renderedAnglesRef = useRef<Record<SpinLayerKey, number>>({
     field: Number.NaN,
@@ -195,6 +230,9 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
     spirit: Number.NaN,
     subtle: Number.NaN,
     mountain: Number.NaN,
+    hexagram: Number.NaN,
+    mansion: Number.NaN,
+    jiazi: Number.NaN,
   });
 
   function setLayerRef(key: SpinLayerKey) {
@@ -288,13 +326,13 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
       <main className="qimen-layout qimen-layout--minimal">
         <svg
           className="qimen-svg"
-          viewBox="0 0 1000 1000"
+          viewBox="-190 -190 1380 1380"
           role="img"
           aria-label="太极八卦奇门图"
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
         >
-          <rect width="1000" height="1000" fill="#fff" />
+          <rect x="-190" y="-190" width="1380" height="1380" fill="#fff" />
           <g
             ref={setLayerRef("field")}
             className="qimen-layer qimen-field-layer"
@@ -346,6 +384,24 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
               cx={CENTER}
               cy={CENTER}
               r="485"
+            />
+            <circle
+              className="qimen-ring-line qimen-ring-line--outer"
+              cx={CENTER}
+              cy={CENTER}
+              r="540"
+            />
+            <circle
+              className="qimen-ring-line qimen-ring-line--outer"
+              cx={CENTER}
+              cy={CENTER}
+              r="590"
+            />
+            <circle
+              className="qimen-ring-line qimen-ring-line--outer"
+              cx={CENTER}
+              cy={CENTER}
+              r="640"
             />
             {mountains.map((mountain, index) => {
               const major = index % 3 === 0;
@@ -457,6 +513,42 @@ export function QimenDunjiaView({ onBack }: QimenDunjiaViewProps) {
             {mountains.map((mountain, index) => (
               <text key={`${mountain}-${index}`} transform={rotateText(index * 15 - 90, 468)}>
                 {mountain}
+              </text>
+            ))}
+          </g>
+
+          <g
+            ref={setLayerRef("hexagram")}
+            className="qimen-layer qimen-hexagram-layer"
+            aria-label="六十四卦"
+          >
+            {hexagrams.map((hexagram, index) => (
+              <text key={hexagram} transform={rotateText(index * 5.625 - 90, 542)}>
+                {hexagram}
+              </text>
+            ))}
+          </g>
+
+          <g
+            ref={setLayerRef("mansion")}
+            className="qimen-layer qimen-mansion-layer"
+            aria-label="二十八宿"
+          >
+            {mansions.map((mansion, index) => (
+              <text key={mansion} transform={rotateText(index * (360 / mansions.length) - 90, 592)}>
+                {mansion}
+              </text>
+            ))}
+          </g>
+
+          <g
+            ref={setLayerRef("jiazi")}
+            className="qimen-layer qimen-jiazi-layer"
+            aria-label="六十甲子"
+          >
+            {jiazi.map((item, index) => (
+              <text key={item} transform={rotateText(index * 6 - 90, 642)}>
+                {item}
               </text>
             ))}
           </g>

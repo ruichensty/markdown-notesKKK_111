@@ -6,6 +6,8 @@ import {
   cyberGates,
   cyberHeavenStems,
   cyberHexagrams,
+  cyberJiazi,
+  cyberMansions,
   cyberMountains,
   cyberPalaces,
   cyberSpirits,
@@ -37,6 +39,8 @@ const cyberLayers = [
   { key: "branch", acceleration: 0.000004, maxSpeed: 0.028, lockFriction: 0.95 },
   { key: "mountain", acceleration: -0.000006, maxSpeed: 0.04, lockFriction: 0.93 },
   { key: "hexagram", acceleration: 0.000003, maxSpeed: 0.024, lockFriction: 0.955 },
+  { key: "mansion", acceleration: -0.000004, maxSpeed: 0.03, lockFriction: 0.95 },
+  { key: "jiazi", acceleration: 0.000002, maxSpeed: 0.018, lockFriction: 0.96 },
 ] as const;
 
 type CyberLayerKey = (typeof cyberLayers)[number]["key"];
@@ -71,6 +75,7 @@ function createOracleId(reading: CyberReading) {
 export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationViewProps) {
   const phaseRef = useRef<CyberPhase>("idle");
   const frameRef = useRef<number | null>(null);
+  const lockTimerRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const layerRefs = useRef<Record<CyberLayerKey, SVGGElement | null>>({
     core: null,
@@ -84,6 +89,8 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
     branch: null,
     mountain: null,
     hexagram: null,
+    mansion: null,
+    jiazi: null,
   });
   const motionRef = useRef<Record<CyberLayerKey, { angle: number; speed: number }>>({
     core: { angle: 0, speed: 0 },
@@ -97,6 +104,8 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
     branch: { angle: 0, speed: 0 },
     mountain: { angle: 0, speed: 0 },
     hexagram: { angle: 0, speed: 0 },
+    mansion: { angle: 0, speed: 0 },
+    jiazi: { angle: 0, speed: 0 },
   });
   const [phase, setPhase] = useState<CyberPhase>("idle");
   const [reading, setReading] = useState<CyberReading | null>(null);
@@ -126,6 +135,8 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
         branchAngle: current.branch.angle,
         mountainAngle: current.mountain.angle,
         hexagramAngle: current.hexagram.angle,
+        mansionAngle: current.mansion.angle,
+        jiaziAngle: current.jiazi.angle,
       })
     );
     setPhaseState("revealed");
@@ -178,18 +189,24 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
 
   function beginSpin() {
     if (phaseRef.current === "locking") return;
+    if (lockTimerRef.current !== null) window.clearTimeout(lockTimerRef.current);
     setReading(null);
     setPhaseState("spinning");
     startAnimation();
-  }
-
-  function stopSpin() {
-    if (phaseRef.current !== "spinning") return;
-    setPhaseState("locking");
-    startAnimation();
+    lockTimerRef.current = window.setTimeout(() => {
+      lockTimerRef.current = null;
+      if (phaseRef.current === "spinning") {
+        setPhaseState("locking");
+        startAnimation();
+      }
+    }, 2800);
   }
 
   function reset() {
+    if (lockTimerRef.current !== null) {
+      window.clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
     setReading(null);
     setPhaseState("idle");
     for (const layer of cyberLayers) {
@@ -200,6 +217,7 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
 
   useEffect(() => {
     return () => {
+      if (lockTimerRef.current !== null) window.clearTimeout(lockTimerRef.current);
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
   }, []);
@@ -229,11 +247,11 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
           >
             <svg
               className="cyber-svg"
-              viewBox="-90 -90 1180 1180"
+              viewBox="-190 -190 1380 1380"
               role="img"
               aria-label="赛博算卦图"
             >
-              <rect x="-90" y="-90" width="1180" height="1180" fill="#fff" />
+              <rect x="-190" y="-190" width="1380" height="1380" fill="#fff" />
               <g className="cyber-data-field" aria-hidden="true">
                 {dataBits.map(bit => {
                   const point = polar(bit.radius, bit.angle);
@@ -254,15 +272,6 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
                   );
                 })}
               </g>
-              <g className="cyber-grid" aria-hidden="true">
-                {Array.from({ length: 9 }, (_, index) => 100 + index * 100).map(value => (
-                  <line key={`v-${value}`} x1={value} y1="70" x2={value} y2="930" />
-                ))}
-                {Array.from({ length: 9 }, (_, index) => 100 + index * 100).map(value => (
-                  <line key={`h-${value}`} x1="70" y1={value} x2="930" y2={value} />
-                ))}
-              </g>
-
               <circle className="cyber-ring" cx={CENTER} cy={CENTER} r="120" />
               <circle className="cyber-ring cyber-ring--subtle" cx={CENTER} cy={CENTER} r="155" />
               <circle className="cyber-ring" cx={CENTER} cy={CENTER} r="210" />
@@ -273,6 +282,8 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
               <circle className="cyber-ring cyber-ring--subtle" cx={CENTER} cy={CENTER} r="430" />
               <circle className="cyber-ring" cx={CENTER} cy={CENTER} r="470" />
               <circle className="cyber-ring cyber-ring--subtle" cx={CENTER} cy={CENTER} r="515" />
+              <circle className="cyber-ring" cx={CENTER} cy={CENTER} r="565" />
+              <circle className="cyber-ring cyber-ring--subtle" cx={CENTER} cy={CENTER} r="615" />
 
               <g ref={setLayerRef("core")} className="cyber-layer cyber-core">
                 <circle cx={CENTER} cy={CENTER} r="76" fill="#fff" stroke="#000" strokeWidth="2" />
@@ -401,7 +412,31 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
                   <text
                     key={item}
                     className="cyber-text cyber-text--hexagram"
-                    transform={rotateText(index * 5.625 - 90, 528)}
+                    transform={rotateText(index * 5.625 - 90, 526)}
+                  >
+                    {item}
+                  </text>
+                ))}
+              </g>
+
+              <g ref={setLayerRef("mansion")} className="cyber-layer cyber-mansion-layer">
+                {cyberMansions.map((item, index) => (
+                  <text
+                    key={item}
+                    className="cyber-text cyber-text--mansion"
+                    transform={rotateText(index * (360 / cyberMansions.length) - 90, 570)}
+                  >
+                    {item}
+                  </text>
+                ))}
+              </g>
+
+              <g ref={setLayerRef("jiazi")} className="cyber-layer cyber-jiazi-layer">
+                {cyberJiazi.map((item, index) => (
+                  <text
+                    key={item}
+                    className="cyber-text cyber-text--jiazi"
+                    transform={rotateText(index * 6 - 90, 622)}
                   >
                     {item}
                   </text>
@@ -411,15 +446,35 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
 
             {phase === "locking" && (
               <div className="cyber-lock-overlay" aria-hidden="true">
+                <span className="cyber-lock-sweep cyber-lock-sweep--vertical" />
+                <span className="cyber-lock-sweep cyber-lock-sweep--horizontal" />
                 <span className="cyber-lock-corner cyber-lock-corner--tl" />
                 <span className="cyber-lock-corner cyber-lock-corner--tr" />
                 <span className="cyber-lock-corner cyber-lock-corner--bl" />
                 <span className="cyber-lock-corner cyber-lock-corner--br" />
-                <div className="cyber-lock-readout">
-                  <span>SCANNING FIELD</span>
-                  <span>SYNCING GATE</span>
-                  <span>LOCKING ORACLE</span>
+                <div className="cyber-lock-targets">
+                  <span />
+                  <span />
+                  <span />
                 </div>
+                <div className="cyber-lock-readout">
+                  <span>01 FIELD SCAN</span>
+                  <span>02 GATE SYNC</span>
+                  <span>03 STAR MATCH</span>
+                  <span>04 HEXAGRAM LOCK</span>
+                </div>
+              </div>
+            )}
+            {(phase === "spinning" || phase === "locking") && (
+              <div className="cyber-motion-effects" aria-hidden="true">
+                <span className="cyber-motion-ring cyber-motion-ring--one" />
+                <span className="cyber-motion-ring cyber-motion-ring--two" />
+                <span className="cyber-motion-ring cyber-motion-ring--three" />
+                <span className="cyber-motion-line cyber-motion-line--a" />
+                <span className="cyber-motion-line cyber-motion-line--b" />
+                <span className="cyber-motion-line cyber-motion-line--c" />
+                <span className="cyber-glitch-band cyber-glitch-band--top" />
+                <span className="cyber-glitch-band cyber-glitch-band--bottom" />
               </div>
             )}
             <div className="cyber-reticle" aria-hidden="true">
@@ -432,9 +487,10 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
           <button
             type="button"
             className="cyber-cast-btn"
-            onClick={phase === "spinning" ? stopSpin : beginSpin}
+            onClick={phase === "spinning" || phase === "locking" ? undefined : beginSpin}
+            disabled={phase === "spinning" || phase === "locking"}
           >
-            {phase === "locking" ? "LOCKING" : phase === "spinning" ? "锁定" : "起卦"}
+            {phase === "locking" ? "LOCKING" : phase === "spinning" ? "CASTING" : "起卦"}
           </button>
         </section>
 
@@ -449,6 +505,7 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
                 <span>&gt; GATE: {reading.gate}</span>
                 <span>&gt; STAR: {reading.star}</span>
                 <span>&gt; HEXAGRAM: {reading.hexagram}</span>
+                <span>&gt; MANSION: {reading.mansion}</span>
                 <span>&gt; RESULT LOCKED</span>
               </div>
               <dl className="cyber-reading-grid">
@@ -492,6 +549,14 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
                   <dt>方位</dt>
                   <dd>{reading.mountain}</dd>
                 </div>
+                <div>
+                  <dt>二十八宿</dt>
+                  <dd>{reading.mansion}</dd>
+                </div>
+                <div>
+                  <dt>六十甲子</dt>
+                  <dd>{reading.jiazi}</dd>
+                </div>
               </dl>
               <p>{reading.summary}</p>
               <strong>建议：{reading.advice}</strong>
@@ -503,7 +568,7 @@ export function CyberDivinationView({ onBack, onOpenQimen }: CyberDivinationView
           ) : (
             <>
               <div className="cyber-code">AWAITING SIGNAL</div>
-              <p>点击「起卦」启动赛博盘。转动后再次点击「锁定」，系统会逐层减速并生成本地解读。</p>
+              <p>点击「起卦」启动赛博盘。系统会自动完成旋转、扫描、锁定，并生成本地解读。</p>
             </>
           )}
         </aside>
