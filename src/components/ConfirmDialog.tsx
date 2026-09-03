@@ -25,29 +25,29 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="absolute inset-0 bg-foreground/25 backdrop-blur-sm" onClick={onCancel} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative bg-popover border border-border rounded-xl shadow-2xl p-5 max-w-xs w-full mx-4 animate-scale-in"
+        className="relative w-full max-w-sm mx-4 rounded-2xl border border-border/60 bg-popover/95 p-5 shadow-[0_24px_64px_hsl(var(--foreground)/0.16)] animate-scale-in backdrop-blur-xl"
       >
-        <p id={titleId} className="text-sm text-foreground mb-4">
+        <p id={titleId} className="text-sm text-foreground mb-5 leading-relaxed">
           {message}
         </p>
         <div className="flex gap-2 justify-end">
           <button
             onClick={onCancel}
             ref={cancelBtnRef}
-            className="px-3 py-1.5 text-xs rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors font-medium"
+            className="px-4 py-2 text-xs rounded-xl bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors font-medium"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className="px-3 py-1.5 text-xs rounded-lg bg-destructive text-white hover:bg-destructive/90 transition-colors font-medium"
+            className="px-4 py-2 text-xs rounded-xl bg-destructive text-white hover:bg-destructive/90 transition-colors font-medium shadow-sm"
           >
             {confirmLabel}
           </button>

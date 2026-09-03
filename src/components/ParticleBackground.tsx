@@ -51,7 +51,7 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
         fpsLimit: 20,
         background: { color: { value: "transparent" } },
         particles: {
-          number: { value: 25, density: { enable: true, width: 1400, height: 900 } },
+          number: { value: 20, density: { enable: true, width: 1400, height: 900 } },
           color: { value: codeColors },
           opacity: { value: { min: 0.15, max: 0.4 } },
           shape: { type: "polygon", options: { polygon: { sides: 6 } } },
@@ -65,10 +65,10 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
 
     return {
       fullScreen: false,
-      fpsLimit: 60,
+      fpsLimit: 30,
       background: { color: { value: "transparent" } },
       particles: {
-        number: { value: 55, density: { enable: true, width: 1400, height: 900 } },
+        number: { value: 30, density: { enable: true, width: 1400, height: 900 } },
         color: { value: codeColors },
         opacity: {
           value: { min: 0.25, max: 0.6 },
@@ -111,10 +111,11 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
             },
           },
           width: { value: 0.6, animation: { enable: true, speed: 0.4, minimumValue: 0.2 } },
-          triangles: { enable: true, opacity: 0.06, color: glowColor },
+          triangles: { enable: false },
         },
       },
       interactivity: {
+        detectsOn: "window",
         events: {
           onHover: { enable: true, mode: "grab" },
           onClick: { enable: true, mode: "push" },
@@ -137,7 +138,7 @@ export default function ParticleBackground({ hidden, isMobile }: ParticleBackgro
     position: "absolute",
     inset: 0,
     zIndex: 0,
-    pointerEvents: "auto",
+    pointerEvents: "none",
   };
 
   return (

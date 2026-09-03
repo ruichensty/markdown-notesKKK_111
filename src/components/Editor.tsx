@@ -26,13 +26,16 @@ interface EditorProps {
   autoPair?: boolean;
   isMobile?: boolean;
   typingSound?: boolean;
-  onAttachmentAdd?: (attachment: {
-    id: string;
-    fileName: string;
-    fileType: string;
-    fileSize: number;
-    uploadedAt: number;
-  }) => void;
+  onAttachmentAdd?: (
+    noteId: string,
+    attachment: {
+      id: string;
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+      uploadedAt: number;
+    }
+  ) => void;
 }
 
 export interface EditorHandle {
@@ -122,7 +125,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   }, [note.id, note.title, note.content]);
 
   const debouncedTitle = useDebounce(title, 500);
-  const debouncedContent = useDebounce(content, 500);
+  const debouncedContent = useDebounce(content, 300);
 
   useImperativeHandle(ref, () => ({
     scrollToLine: (line: number) => {
@@ -180,27 +183,28 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       e.preventDefault();
       for (const file of files) {
         const attachmentId = generateId();
+        const targetNoteId = note.id;
         const reader = new FileReader();
         reader.onload = () => {
           const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, noteIdRef.current, arrayBuffer, file.name, file.type).then(
-            () => {
-              const marker = `![${file.name}](attachment://${attachmentId})`;
+          idbSaveFile(attachmentId, targetNoteId, arrayBuffer, file.name, file.type).then(() => {
+            const marker = `![${file.name}](attachment://${attachmentId})`;
+            if (noteIdRef.current === targetNoteId) {
               insertImageMarker(marker);
-              onAttachmentAdd?.({
-                id: attachmentId,
-                fileName: file.name,
-                fileType: file.type,
-                fileSize: arrayBuffer.byteLength,
-                uploadedAt: Date.now(),
-              });
             }
-          );
+            onAttachmentAdd?.(targetNoteId, {
+              id: attachmentId,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: arrayBuffer.byteLength,
+              uploadedAt: Date.now(),
+            });
+          });
         };
         reader.readAsArrayBuffer(file);
       }
     },
-    [insertImageMarker, onAttachmentAdd]
+    [insertImageMarker, onAttachmentAdd, note.id]
   );
 
   const handleDrop = useCallback(
@@ -211,40 +215,56 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       e.preventDefault();
       for (const file of files) {
         const attachmentId = generateId();
+        const targetNoteId = note.id;
         const reader = new FileReader();
         reader.onload = () => {
           const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, noteIdRef.current, arrayBuffer, file.name, file.type).then(
-            () => {
-              const marker = `![${file.name}](attachment://${attachmentId})`;
+          idbSaveFile(attachmentId, targetNoteId, arrayBuffer, file.name, file.type).then(() => {
+            const marker = `![${file.name}](attachment://${attachmentId})`;
+            if (noteIdRef.current === targetNoteId) {
               insertImageMarker(marker);
-              onAttachmentAdd?.({
-                id: attachmentId,
-                fileName: file.name,
-                fileType: file.type,
-                fileSize: arrayBuffer.byteLength,
-                uploadedAt: Date.now(),
-              });
             }
-          );
+            onAttachmentAdd?.(targetNoteId, {
+              id: attachmentId,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: arrayBuffer.byteLength,
+              uploadedAt: Date.now(),
+            });
+          });
         };
         reader.readAsArrayBuffer(file);
       }
     },
-    [insertImageMarker, onAttachmentAdd]
+    [insertImageMarker, onAttachmentAdd, note.id]
   );
 
-  const wrapSelection = useCallback(
-    (before: string, after: string, placeholder: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      insertAtCursor(textarea, content, setContent, before, after, placeholder);
-    },
-    [content]
-  );
+  const wrapSelection = useCallback((before: string, after: string, placeholder: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    insertAtCursor(textarea, contentRef.current, setContent, before, after, placeholder);
+  }, []);
+
+  const insertBlockPrefix = useCallback((prefix: string, placeholder: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const content = contentRef.current;
+    const start = textarea.selectionStart;
+    const atLineStart = start === 0 || content.charAt(start - 1) === "\n";
+    insertAtCursor(
+      textarea,
+      content,
+      setContent,
+      atLineStart ? prefix : "\n" + prefix,
+      "",
+      placeholder
+    );
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
       if (typingSound && !e.ctrlKey && !e.metaKey) {
         if (e.key === "Enter") playEnter();
         else if (e.key === "Backspace" || e.key === "Delete") playBackspace();
@@ -253,6 +273,38 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       const textarea = textareaRef.current;
       if (!textarea) return;
+
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        if (start === end) {
+          const before = content.substring(0, start);
+          const lineStart = before.lastIndexOf("\n") + 1;
+          const line = before.substring(lineStart);
+          const markerMatch = /^(\s*)(?:([-*+])\s+|(\d+)([.)])\s+|>\s?)/.exec(line);
+          if (markerMatch) {
+            e.preventDefault();
+            const [markerText, indent, bullet, num, delim] = markerMatch;
+            const hasContent = line.length > markerText.length;
+            if (!hasContent) {
+              const newText = content.substring(0, lineStart) + content.substring(start);
+              setContent(newText);
+              setTimeout(() => {
+                textarea.selectionStart = textarea.selectionEnd = lineStart;
+              }, 0);
+              return;
+            }
+            const nextMarker = bullet ? `${bullet} ` : num ? `${Number(num) + 1}${delim} ` : "> ";
+            const insertText = `\n${indent}${nextMarker}`;
+            const newText = content.substring(0, start) + insertText + content.substring(end);
+            setContent(newText);
+            setTimeout(() => {
+              textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+            }, 0);
+            return;
+          }
+        }
+      }
 
       if (e.key === "Tab") {
         e.preventDefault();
@@ -361,20 +413,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   );
   const handleHeading = useCallback(
     (level: number) => {
-      const prefix = "#".repeat(level) + " ";
-      wrapSelection("\n" + prefix, "", "标题");
+      insertBlockPrefix("#".repeat(level) + " ", "标题");
     },
-    [wrapSelection]
+    [insertBlockPrefix]
   );
   const handleUnorderedList = useCallback(
-    () => wrapSelection("\n- ", "\n", "列表项"),
-    [wrapSelection]
+    () => insertBlockPrefix("- ", "列表项"),
+    [insertBlockPrefix]
   );
   const handleOrderedList = useCallback(
-    () => wrapSelection("\n1. ", "\n", "列表项"),
-    [wrapSelection]
+    () => insertBlockPrefix("1. ", "列表项"),
+    [insertBlockPrefix]
   );
-  const handleQuote = useCallback(() => wrapSelection("\n> ", "\n", "引用文字"), [wrapSelection]);
+  const handleQuote = useCallback(() => insertBlockPrefix("> ", "引用文字"), [insertBlockPrefix]);
+
+  const openSearch = useCallback(() => {
+    setShowSearch(true);
+    setSearchReplaceMode(false);
+  }, []);
   const handleLink = useCallback(
     () => wrapSelection("[", "](https://)", "链接文字"),
     [wrapSelection]
@@ -382,6 +438,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const handleLineBreak = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+    const content = contentRef.current;
     const start = textarea.selectionStart;
     const newText = content.substring(0, start) + "  \n" + content.substring(start);
     setContent(newText);
@@ -389,58 +446,54 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       textarea.focus();
       textarea.selectionStart = textarea.selectionEnd = start + 3;
     }, 0);
-  }, [content]);
+  }, []);
 
-  const handleFontSize = useCallback(
-    (size: number) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selected = content.substring(start, end);
-      const tag = `<span style="font-size:${size}px">`;
-      const closeTag = "</span>";
-      if (selected) {
-        const newText =
-          content.substring(0, start) + tag + selected + closeTag + content.substring(end);
-        setContent(newText);
-      } else {
-        const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
-        setContent(newText);
-        setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = textarea.selectionEnd = start + tag.length;
-        }, 0);
-      }
-    },
-    [content]
-  );
+  const handleFontSize = useCallback((size: number) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const content = contentRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.substring(start, end);
+    const tag = `<span style="font-size:${size}px">`;
+    const closeTag = "</span>";
+    if (selected) {
+      const newText =
+        content.substring(0, start) + tag + selected + closeTag + content.substring(end);
+      setContent(newText);
+    } else {
+      const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
+      setContent(newText);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+      }, 0);
+    }
+  }, []);
 
-  const handleColor = useCallback(
-    (color: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selected = content.substring(start, end);
-      setTextColor(color);
-      const tag = `<span style="color:${color}">`;
-      const closeTag = "</span>";
-      if (selected) {
-        const newText =
-          content.substring(0, start) + tag + selected + closeTag + content.substring(end);
-        setContent(newText);
-      } else {
-        const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
-        setContent(newText);
-        setTimeout(() => {
-          textarea.focus();
-          textarea.selectionStart = textarea.selectionEnd = start + tag.length;
-        }, 0);
-      }
-    },
-    [content]
-  );
+  const handleColor = useCallback((color: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const content = contentRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.substring(start, end);
+    setTextColor(color);
+    const tag = `<span style="color:${color}">`;
+    const closeTag = "</span>";
+    if (selected) {
+      const newText =
+        content.substring(0, start) + tag + selected + closeTag + content.substring(end);
+      setContent(newText);
+    } else {
+      const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
+      setContent(newText);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+      }, 0);
+    }
+  }, []);
 
   const resolvedFontSize =
     typeof fontSize === "number" ? fontSize : (FONT_SIZE_MAP[fontSize] ?? 14);
@@ -488,10 +541,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         onCode={handleCode}
         onCodeBlock={handleCodeBlock}
         onLink={handleLink}
-        onSearch={() => {
-          setShowSearch(true);
-          setSearchReplaceMode(false);
-        }}
+        onSearch={openSearch}
         onFontSize={handleFontSize}
         onColor={handleColor}
         onLineBreak={handleLineBreak}

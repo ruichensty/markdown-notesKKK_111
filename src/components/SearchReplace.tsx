@@ -96,17 +96,17 @@ export function SearchReplace({
         e.preventDefault();
         onClose();
       }
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter") {
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest?.("[data-search-replace]")) return;
         e.preventDefault();
         if (e.ctrlKey || e.metaKey) {
           handleReplace();
+        } else if (e.shiftKey) {
+          handlePrev();
         } else {
           handleNext();
         }
-      }
-      if (e.key === "Enter" && e.shiftKey) {
-        e.preventDefault();
-        handlePrev();
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -114,10 +114,13 @@ export function SearchReplace({
   }, [onClose, handleNext, handlePrev, handleReplace]);
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/50 bg-muted/20 text-[11px]">
+    <div
+      data-search-replace
+      className="flex items-center gap-1.5 px-2.5 py-2 border-b border-border/50 bg-card/40 text-[11px] backdrop-blur-md"
+    >
       <button
         onClick={onClose}
-        className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1 rounded-lg hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors"
       >
         <svg
           className="w-3.5 h-3.5"
@@ -140,7 +143,7 @@ export function SearchReplace({
             setCurrentIndex(0);
           }}
           placeholder="搜索..."
-          className="w-full px-2 py-1 text-[11px] bg-background border border-border/50 rounded focus:outline-none focus:border-primary/50"
+          className="w-full px-2.5 py-1.5 text-[11px] bg-background/70 border border-border/50 rounded-lg focus:outline-none focus:border-primary/50 focus:bg-card/90"
         />
       </div>
 
@@ -153,7 +156,7 @@ export function SearchReplace({
           setCaseSensitive(!caseSensitive);
           setCurrentIndex(0);
         }}
-        className={`p-1 rounded text-[10px] font-bold transition-colors ${caseSensitive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
+        className={`p-1.5 rounded-lg text-[10px] font-bold transition-colors ${caseSensitive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
         title="大小写敏感"
       >
         Aa
@@ -161,7 +164,7 @@ export function SearchReplace({
 
       <button
         onClick={handlePrev}
-        className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+        className="p-1 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground"
         title="上一个"
       >
         <svg
@@ -177,7 +180,7 @@ export function SearchReplace({
 
       <button
         onClick={handleNext}
-        className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+        className="p-1 rounded-lg hover:bg-muted/60 text-muted-foreground hover:text-foreground"
         title="下一个"
       >
         <svg
@@ -193,7 +196,7 @@ export function SearchReplace({
 
       <button
         onClick={() => setShowReplace(!showReplace)}
-        className={`p-0.5 rounded transition-colors ${showReplace ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
+        className={`p-1 rounded-lg transition-colors ${showReplace ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}`}
         title="替换"
       >
         <svg
@@ -219,19 +222,19 @@ export function SearchReplace({
               value={replaceText}
               onChange={e => setReplaceText(e.target.value)}
               placeholder="替换为..."
-              className="w-full px-2 py-1 text-[11px] bg-background border border-border/50 rounded focus:outline-none focus:border-primary/50"
+              className="w-full px-2.5 py-1.5 text-[11px] bg-background/70 border border-border/50 rounded-lg focus:outline-none focus:border-primary/50 focus:bg-card/90"
             />
           </div>
           <button
             onClick={handleReplace}
-            className="px-1.5 py-0.5 rounded text-[10px] bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="px-2 py-1 rounded-lg text-[10px] bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             title="替换"
           >
             替换
           </button>
           <button
             onClick={handleReplaceAll}
-            className="px-1.5 py-0.5 rounded text-[10px] bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="px-2 py-1 rounded-lg text-[10px] bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             title="全部替换"
           >
             全部

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Note } from "@types";
 import { exportAsMarkdown, exportAsHTML, exportAsText, exportAsPDF } from "@utils/export";
 import { useTheme } from "@context";
@@ -22,7 +23,7 @@ interface ToolbarProps {
   isMobile?: boolean;
 }
 
-export function Toolbar({
+function ToolbarBase({
   currentNote,
   onNewNote,
   showExportMenu,
@@ -48,10 +49,10 @@ export function Toolbar({
 
     switch (format) {
       case "markdown":
-        exportAsMarkdown(currentNote!);
+        void exportAsMarkdown(currentNote!);
         break;
       case "html":
-        exportAsHTML(currentNote!);
+        void exportAsHTML(currentNote!);
         break;
       case "text":
         exportAsText(currentNote!);
@@ -425,3 +426,5 @@ export function Toolbar({
     </div>
   );
 }
+
+export const Toolbar = memo(ToolbarBase);

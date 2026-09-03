@@ -1,5 +1,6 @@
 export * from "./useNotes";
 export * from "./useDebounce";
+export * from "./useAdaptiveDebounce";
 export * from "./useKeyboardShortcuts";
 export * from "./useErrorHandler";
 export * from "./useSettings";

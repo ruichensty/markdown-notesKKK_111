@@ -702,7 +702,7 @@ function SortableFolderNoteItem({
   );
 }
 
-export function FolderTree(props: FolderTreeProps) {
+function FolderTreeBase(props: FolderTreeProps) {
   const {
     folders,
     notes,
@@ -1041,6 +1041,8 @@ export function FolderTree(props: FolderTreeProps) {
     </div>
   );
 }
+
+export const FolderTree = memo(FolderTreeBase);
 
 function isFolderInSubtree(folderId: string, subtree: FolderNodeData): boolean {
   const check = (f: FolderNodeData): boolean => {

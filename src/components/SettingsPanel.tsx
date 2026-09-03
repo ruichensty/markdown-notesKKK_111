@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import type { Settings } from "@hooks/useSettings";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
@@ -21,7 +21,7 @@ interface SettingsPanelProps {
   onInsertTemplate?: (templateId: string) => void;
 }
 
-export function SettingsPanel({
+function SettingsPanelBase({
   isOpen,
   onClose,
   settings,
@@ -59,8 +59,8 @@ export function SettingsPanel({
   if (!rendered) return null;
 
   return (
-    <div className="absolute inset-0 z-[10000]">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+    <div className="fixed inset-0 z-[11000]">
+      <div className="fixed inset-0 bg-black/30" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -68,16 +68,39 @@ export function SettingsPanel({
         aria-labelledby={titleId}
         tabIndex={-1}
         onTransitionEnd={handleTransitionEnd}
-        className={`settings-drawer absolute top-0 right-0 bottom-0 z-[10001] max-w-full flex flex-col transition-transform duration-300 ease-out ${visible ? "translate-x-0 settings-drawer--visible" : "translate-x-full"}`}
+        className={`settings-drawer fixed top-0 right-0 bottom-0 z-[10001] max-w-full flex flex-col transition-transform duration-300 ease-out ${visible ? "translate-x-0 settings-drawer--visible" : "translate-x-full"}`}
+        style={{
+          background:
+            "linear-gradient(180deg, hsl(var(--surface-toolbar) / 0.92), hsl(var(--background) / 0.96))",
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          borderLeft: "1px solid hsl(var(--border) / 0.55)",
+          boxShadow: "-24px 0 64px hsl(var(--foreground) / 0.08)",
+          width: "clamp(320px, 28vw, 420px)",
+        }}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h2 id={titleId} className="text-sm font-semibold text-foreground">
-            设置
-          </h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 shrink-0 bg-gradient-to-b from-card/40 to-transparent">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                viewBox="0 0 24 24"
+              >
+                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+              </svg>
+            </span>
+            <h2 id={titleId} className="text-sm font-semibold text-foreground">
+              设置
+            </h2>
+          </div>
           <button
             onClick={onClose}
             aria-label="关闭设置"
-            className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted/80 transition-colors text-muted-foreground hover:text-foreground"
           >
             <svg
               className="w-4 h-4"
@@ -91,9 +114,9 @@ export function SettingsPanel({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-6 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 space-y-7 scrollbar-thin">
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               主题强调色
             </label>
             <div className="grid grid-cols-6 gap-2">
@@ -149,10 +172,10 @@ export function SettingsPanel({
           </div>
 
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               首页布局
             </label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               {HOME_LAYOUTS.map(opt => {
                 const active = settings.homeLayout === opt.id;
                 return (
@@ -160,10 +183,10 @@ export function SettingsPanel({
                     key={opt.id}
                     onClick={() => handleChange("homeLayout", opt.id)}
                     title={opt.desc}
-                    className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-md text-[11px] font-medium transition-all border ${
+                    className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-[11px] font-medium transition-all border ${
                       active
-                        ? "bg-primary/10 border-primary text-primary"
-                        : "bg-muted/50 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
+                        ? "bg-primary/10 border-primary text-primary shadow-sm"
+                        : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70"
                     }`}
                   >
                     {opt.name}
@@ -173,10 +196,10 @@ export function SettingsPanel({
             </div>
           </div>
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               编辑器字体大小
             </label>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2 p-1 bg-muted/40 rounded-xl">
               {[
                 { value: "sm", label: "小" },
                 { value: "md", label: "中" },
@@ -185,10 +208,10 @@ export function SettingsPanel({
                 <button
                   key={opt.value}
                   onClick={() => handleChange("fontSize", opt.value)}
-                  className={`flex-1 py-2 rounded-md text-[11px] font-medium transition-all border ${
+                  className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all ${
                     settings.fontSize === opt.value
-                      ? "bg-primary/10 border-primary text-primary"
-                      : "bg-muted/50 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {opt.label}
@@ -198,10 +221,10 @@ export function SettingsPanel({
           </div>
 
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               编辑器字体
             </label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 gap-2">
               {FONT_FAMILY_PRESETS.map(opt => {
                 const active = settings.fontFamily === opt.id;
                 return (
@@ -209,10 +232,10 @@ export function SettingsPanel({
                     key={opt.id}
                     onClick={() => handleChange("fontFamily", opt.id)}
                     title={opt.desc}
-                    className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-md text-[11px] font-medium transition-all border ${
+                    className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-[11px] font-medium transition-all border ${
                       active
-                        ? "bg-primary/10 border-primary text-primary"
-                        : "bg-muted/50 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted"
+                        ? "bg-primary/10 border-primary text-primary shadow-sm"
+                        : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70"
                     }`}
                   >
                     <span className="text-base leading-none" style={{ fontFamily: opt.stack }}>
@@ -226,7 +249,7 @@ export function SettingsPanel({
           </div>
 
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               行高{" "}
               <span className="text-foreground normal-case">{settings.lineHeight.toFixed(1)}</span>
             </label>
@@ -239,14 +262,14 @@ export function SettingsPanel({
               onChange={e => handleChange("lineHeight", Number(e.target.value))}
               className="w-full h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1">
+            <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1.5">
               <span>紧凑</span>
               <span>宽松</span>
             </div>
           </div>
 
           <div className="settings-section">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               侧边栏宽度{" "}
               <span className="text-foreground normal-case">{settings.sidebarWidth}px</span>
             </label>
@@ -259,173 +282,124 @@ export function SettingsPanel({
               onChange={e => handleChange("sidebarWidth", Number(e.target.value))}
               className="w-full h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1">
+            <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1.5">
               <span>窄</span>
               <span>宽</span>
             </div>
           </div>
 
-          <div className="settings-section flex items-center justify-between">
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              自动保存
-            </label>
-            <button
-              onClick={() => handleChange("autoSave", !settings.autoSave)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${settings.autoSave ? "bg-primary" : "bg-muted"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.autoSave ? "translate-x-4" : "translate-x-0"}`}
-              />
-            </button>
+          <div className="settings-section space-y-3">
+            {[
+              { key: "autoSave", label: "自动保存" },
+              { key: "showLineNumbers", label: "显示行号" },
+            ].map(({ key, label }) => {
+              const value = settings[key as keyof Settings] as boolean;
+              return (
+                <div key={key} className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-foreground">{label}</label>
+                  <button
+                    onClick={() => handleChange(key, !value)}
+                    className={`relative w-10 h-6 rounded-full transition-colors ${value ? "bg-primary" : "bg-muted"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${value ? "translate-x-4" : "translate-x-0"}`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="settings-section flex items-center justify-between">
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              显示行号
-            </label>
-            <button
-              onClick={() => handleChange("showLineNumbers", !settings.showLineNumbers)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${settings.showLineNumbers ? "bg-primary" : "bg-muted"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.showLineNumbers ? "translate-x-4" : "translate-x-0"}`}
-              />
-            </button>
-          </div>
-
-          <div className="settings-section pt-2 border-t border-border">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <div className="settings-section pt-2 border-t border-border/50">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-4">
               编辑器模式
             </label>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">焦点模式</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">F8</span>
-                </div>
-                <button
-                  onClick={() => handleChange("focusMode", !settings.focusMode)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.focusMode ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.focusMode ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">打字机模式</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">F9</span>
-                </div>
-                <button
-                  onClick={() => handleChange("typewriterMode", !settings.typewriterMode)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.typewriterMode ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.typewriterMode ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-foreground">自动配对</span>
-                <button
-                  onClick={() => handleChange("autoPair", !settings.autoPair)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.autoPair ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.autoPair ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
+              {[
+                { key: "focusMode", label: "焦点模式", hint: "F8" },
+                { key: "typewriterMode", label: "打字机模式", hint: "F9" },
+                { key: "autoPair", label: "自动配对", hint: "" },
+              ].map(({ key, label, hint }) => {
+                const value = settings[key as keyof Settings] as boolean;
+                return (
+                  <div key={key} className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-medium text-foreground">{label}</span>
+                      {hint && (
+                        <span className="text-[10px] text-muted-foreground ml-1.5">{hint}</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleChange(key, !value)}
+                      className={`relative w-10 h-6 rounded-full transition-colors ${value ? "bg-primary" : "bg-muted"}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${value ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="settings-section pt-2 border-t border-border">
-            <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <div className="settings-section pt-2 border-t border-border/50">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-4">
               体验增强
             </label>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">打字音效</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">键盘声反馈</span>
-                </div>
-                <button
-                  onClick={() => handleChange("typingSound", !settings.typingSound)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.typingSound ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.typingSound ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">涂鸦层</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">笔记上手写标注</span>
-                </div>
-                <button
-                  onClick={() => handleChange("doodleLayer", !settings.doodleLayer)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.doodleLayer ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.doodleLayer ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">夜间护眼</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">自动暖色渐变</span>
-                </div>
-                <button
-                  onClick={() => handleChange("eyeCare", !settings.eyeCare)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.eyeCare ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.eyeCare ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-foreground">健康提醒</span>
-                  <span className="text-[10px] text-muted-foreground ml-1.5">定时喝水休息</span>
-                </div>
-                <button
-                  onClick={() => handleChange("healthReminder", !settings.healthReminder)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${settings.healthReminder ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.healthReminder ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
-              {settings.healthReminder && (
-                <div className="ml-auto">
-                  <label className="block text-[10px] text-muted-foreground mb-1">
-                    提醒间隔{" "}
-                    <span className="text-foreground">{settings.reminderInterval} 分钟</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="30"
-                    max="120"
-                    step="15"
-                    value={settings.reminderInterval}
-                    onChange={e => handleChange("reminderInterval", Number(e.target.value))}
-                    className="w-32 h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
-                  />
-                  <div className="flex justify-between text-[9px] text-muted-foreground/40 mt-0.5">
-                    <span>30</span>
-                    <span>120</span>
+              {[
+                { key: "typingSound", label: "打字音效", hint: "键盘声反馈" },
+                { key: "doodleLayer", label: "涂鸦层", hint: "笔记上手写标注" },
+                { key: "eyeCare", label: "夜间护眼", hint: "自动暖色渐变" },
+                { key: "healthReminder", label: "健康提醒", hint: "定时喝水休息" },
+                { key: "particleEffects", label: "粒子背景", hint: "关闭可提升流畅度" },
+              ].map(({ key, label, hint }) => {
+                const value = settings[key as keyof Settings] as boolean;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-medium text-foreground">{label}</span>
+                        <span className="text-[10px] text-muted-foreground ml-1.5">{hint}</span>
+                      </div>
+                      <button
+                        onClick={() => handleChange(key, !value)}
+                        className={`relative w-10 h-6 rounded-full transition-colors ${value ? "bg-primary" : "bg-muted"}`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${value ? "translate-x-4" : "translate-x-0"}`}
+                        />
+                      </button>
+                    </div>
+                    {key === "healthReminder" && value && (
+                      <div className="ml-auto mt-2">
+                        <label className="block text-[10px] text-muted-foreground mb-1">
+                          提醒间隔{" "}
+                          <span className="text-foreground">{settings.reminderInterval} 分钟</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="30"
+                          max="120"
+                          step="15"
+                          value={settings.reminderInterval}
+                          onChange={e => handleChange("reminderInterval", Number(e.target.value))}
+                          className="w-32 h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9px] text-muted-foreground/40 mt-0.5">
+                          <span>30</span>
+                          <span>120</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
 
-          <div className="settings-section pt-2 border-t border-border">
+          <div className="settings-section pt-2 border-t border-border/50">
             {onInsertTemplate && <TemplateManagement onInsertTemplate={onInsertTemplate} />}
           </div>
         </div>
@@ -433,3 +407,5 @@ export function SettingsPanel({
     </div>
   );
 }
+
+export const SettingsPanel = memo(SettingsPanelBase);

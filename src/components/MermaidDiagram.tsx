@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useId } from "react";
 import DOMPurify from "dompurify";
 import type { Mermaid } from "mermaid";
+import { useTheme } from "@context";
 
 let mermaidPromise: Promise<Mermaid> | null = null;
 
@@ -24,30 +25,41 @@ interface MermaidDiagramProps {
 }
 
 const supportedDiagramPattern =
-  /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|journey|timeline|gitGraph)\b/i;
+  /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|pie|journey|timeline|gitGraph|mindmap|quadrantChart|sankey-beta|xychart-beta|block-beta|packet-beta|architecture-beta|radar-beta|requirementDiagram|C4Context|C4Container|C4Dynamic)\b/i;
+
+const unsupportedText =
+  "当前仅支持 graph、flowchart、sequenceDiagram、classDiagram、stateDiagram、erDiagram、gantt、pie、journey、timeline、gitGraph、mindmap、quadrantChart、sankey、xychart、block、packet、architecture、radar、requirementDiagram 及 C4 系列图。";
 
 export function MermaidDiagram({ code }: MermaidDiagramProps) {
+  const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [svg, setSvg] = useState<string | null>(null);
   const instanceCounter = useRef(0);
   const reactId = useId().replace(/:/g, "_");
-  const lastCodeRef = useRef<string>("");
-  const unsupportedMessage = supportedDiagramPattern.test(code)
-    ? null
-    : "当前仅支持 graph、flowchart、sequenceDiagram、classDiagram、stateDiagram、erDiagram、gantt、pie、journey、timeline 和 gitGraph。";
+  const lastKeyRef = useRef<string>("");
+  const isDarkTheme = theme === "dark" || theme === "black-rainbow";
+  const unsupportedMessage = supportedDiagramPattern.test(code) ? null : unsupportedText;
 
   useEffect(() => {
     if (unsupportedMessage) return;
 
-    if (code === lastCodeRef.current) return;
-    lastCodeRef.current = code;
+    const cacheKey = `${isDarkTheme ? "dark" : "light"}::${code}`;
+    if (cacheKey === lastKeyRef.current) return;
+    lastKeyRef.current = cacheKey;
 
     let cancelled = false;
     const id = `mermaid-${reactId}-${++instanceCounter.current}`;
 
     loadMermaid()
-      .then(mermaid => mermaid.render(id, code))
+      .then(mermaid => {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: isDarkTheme ? "dark" : "default",
+          securityLevel: "strict",
+        });
+        return mermaid.render(id, code);
+      })
       .then(({ svg: renderedSvg }) => {
         if (!cancelled) {
           setSvg(
@@ -67,7 +79,7 @@ export function MermaidDiagram({ code }: MermaidDiagramProps) {
     return () => {
       cancelled = true;
     };
-  }, [code, reactId, unsupportedMessage]);
+  }, [code, reactId, unsupportedMessage, isDarkTheme]);
 
   if (unsupportedMessage || error) {
     return (

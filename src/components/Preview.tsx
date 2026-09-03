@@ -1,15 +1,15 @@
-import { useMemo, memo, lazy, Suspense, createContext, useContext, type ReactNode } from "react";
+import { useMemo, memo, lazy, Suspense, createContext, useContext } from "react";
 import ReactMarkdown from "react-markdown";
-import type { Components } from "react-markdown";
+import type { Components, ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeRaw from "rehype-raw";
 import rehypeKatex from "rehype-katex";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
 import { vscDarkPlus, vs } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "@context";
-import { useDebounce } from "@hooks";
+import { useAdaptiveDebounce } from "@hooks";
 import { AttachmentImage } from "./AttachmentImage";
 import type { Note } from "@types";
 import "katex/dist/katex.min.css";
@@ -72,24 +72,31 @@ const PreviewConfigContext = createContext<PreviewConfig>({
   showLineNumbers: false,
 });
 
+const SAFE_STYLE_PATTERN = /^(?:[a-zA-Z-]+\s*:\s*[^;]+;\s*)*[a-zA-Z-]+\s*:\s*[^;]+$/;
+
+const sanitizeSchema: typeof defaultSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    span: [...(defaultSchema.attributes?.span ?? []), ["style", SAFE_STYLE_PATTERN]],
+  },
+};
+
 function CodeBlock({
   className,
   children,
+  node: _node,
   ...props
-}: {
-  inline?: boolean;
-  className?: string;
-  children?: ReactNode;
-} & React.HTMLAttributes<HTMLElement>) {
+}: ExtraProps & React.HTMLAttributes<HTMLElement>) {
   const { theme, showLineNumbers } = useContext(PreviewConfigContext);
   const match = /language-(\w+)/.exec(className || "");
-  const isInline = (props as Record<string, unknown>).inline !== true;
+  const code = String(children).replace(/\n$/, "");
+  const isBlock = match !== null || code.includes("\n");
 
   const isDarkTheme = theme === "dark" || theme === "black-rainbow";
 
-  if (isInline && match) {
-    const lang = match[1];
-    const code = String(children).replace(/\n$/, "");
+  if (isBlock) {
+    const lang = match?.[1];
     if (lang === "mermaid") {
       return (
         <Suspense
@@ -101,23 +108,30 @@ function CodeBlock({
         </Suspense>
       );
     }
+    if (lang) {
+      return (
+        <SyntaxHighlighter
+          {...props}
+          style={isDarkTheme ? vscDarkPlus : vs}
+          language={lang}
+          PreTag="div"
+          showLineNumbers={showLineNumbers}
+          customStyle={{
+            background: "transparent",
+            padding: "1rem",
+            borderRadius: "0.5rem",
+            margin: "1rem 0",
+            fontSize: "0.875rem",
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      );
+    }
     return (
-      <SyntaxHighlighter
-        {...props}
-        style={isDarkTheme ? vscDarkPlus : vs}
-        language={lang}
-        PreTag="div"
-        showLineNumbers={showLineNumbers}
-        customStyle={{
-          background: "transparent",
-          padding: "1rem",
-          borderRadius: "0.5rem",
-          margin: "1rem 0",
-          fontSize: "0.875rem",
-        }}
-      >
+      <code {...props} className="font-mono">
         {code}
-      </SyntaxHighlighter>
+      </code>
     );
   }
   return (
@@ -132,7 +146,12 @@ function CodeBlock({
 
 const MemoizedCodeBlock = memo(CodeBlock);
 
-function ImgComponent({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) {
+function ImgComponent({
+  src,
+  alt,
+  node: _node,
+  ...props
+}: ExtraProps & React.ImgHTMLAttributes<HTMLImageElement>) {
   if (src?.startsWith("attachment://")) {
     return <AttachmentImage src={src} alt={alt || ""} />;
   }
@@ -148,7 +167,7 @@ interface PreviewProps {
 
 function Preview({ note, showLineNumbers = false }: PreviewProps) {
   const { theme } = useTheme();
-  const debouncedContent = useDebounce(note.content || "", 300);
+  const debouncedContent = useAdaptiveDebounce(note.content || "", 150, 600, 1200);
 
   const config = useMemo<PreviewConfig>(
     () => ({ theme, showLineNumbers }),
@@ -169,7 +188,10 @@ function Preview({ note, showLineNumbers = false }: PreviewProps) {
   );
 
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
-  const rehypePlugins = useMemo(() => [rehypeRaw, rehypeSanitize, rehypeKatex], []);
+  const rehypePlugins = useMemo<React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"]>(
+    () => [rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex],
+    []
+  );
 
   return (
     <PreviewConfigContext.Provider value={config}>

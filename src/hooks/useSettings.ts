@@ -19,6 +19,7 @@ export interface Settings {
   fontFamily: "sans" | "serif" | "mono";
   homeLayout: "quotes" | "dashboard" | "minimal" | "curtain" | "writer";
   expandedFolders: string[];
+  particleEffects: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +40,7 @@ const DEFAULT_SETTINGS: Settings = {
   fontFamily: "mono",
   homeLayout: "dashboard",
   expandedFolders: [],
+  particleEffects: true,
 };
 
 const SETTINGS_KEY = "settings";

@@ -58,7 +58,7 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
             setEditingId(null);
             setFormData({ name: "", description: "", content: "" });
           }}
-          className="text-[10px] text-primary hover:text-primary/80 font-medium transition-colors"
+          className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] text-primary hover:bg-primary/15 font-semibold transition-colors"
         >
           + 新建模板
         </button>
@@ -68,13 +68,13 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
         {templates.map(tpl => (
           <div
             key={tpl.id}
-            className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors group"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/35 hover:bg-muted/65 border border-border/35 transition-colors group"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-foreground font-medium truncate">{tpl.name}</span>
                 {tpl.isBuiltin && (
-                  <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
                     内置
                   </span>
                 )}
@@ -86,7 +86,7 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={() => onInsertTemplate(tpl.id)}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
                 title="使用模板"
               >
                 <svg
@@ -101,7 +101,7 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
               </button>
               <button
                 onClick={() => handleEdit(tpl.id)}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 title="编辑"
               >
                 <svg
@@ -118,7 +118,7 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
               {!tpl.isBuiltin && (
                 <button
                   onClick={() => handleDelete(tpl.id)}
-                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                   title="删除"
                 >
                   <svg
@@ -138,37 +138,37 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
       </div>
 
       {(showCreate || editingId) && (
-        <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/20">
+        <div className="border border-border/50 rounded-2xl p-3.5 space-y-2.5 bg-card/45 shadow-sm">
           <input
             value={formData.name}
             onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="模板名称"
-            className="w-full px-2.5 py-1.5 text-xs bg-popover border border-border rounded-md text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors"
+            className="w-full px-3 py-2 text-xs bg-background/70 border border-border/55 rounded-xl text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/60 transition-colors"
           />
           <input
             value={formData.description}
             onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
             placeholder="模板描述"
-            className="w-full px-2.5 py-1.5 text-xs bg-popover border border-border rounded-md text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors"
+            className="w-full px-3 py-2 text-xs bg-background/70 border border-border/55 rounded-xl text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/60 transition-colors"
           />
           <textarea
             value={formData.content}
             onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
             placeholder="模板内容（支持 {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{title}} 变量）"
             rows={8}
-            className="w-full px-2.5 py-1.5 text-xs bg-popover border border-border rounded-md text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors resize-y font-mono leading-relaxed"
+            className="w-full px-3 py-2 text-xs bg-background/70 border border-border/55 rounded-xl text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/60 transition-colors resize-y font-mono leading-relaxed"
           />
           <div className="flex gap-2 justify-end">
             <button
               onClick={handleCancel}
-              className="px-2.5 py-1 text-[10px] rounded-md bg-muted text-muted-foreground hover:bg-muted/80 transition-colors font-medium"
+              className="px-3 py-1.5 text-[10px] rounded-lg bg-muted/70 text-muted-foreground hover:bg-muted transition-colors font-medium"
             >
               取消
             </button>
             {editingId && !currentTemplate?.isBuiltin && (
               <button
                 onClick={() => handleDelete(editingId)}
-                className="px-2.5 py-1 text-[10px] rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-medium"
+                className="px-3 py-1.5 text-[10px] rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors font-medium"
               >
                 删除
               </button>
@@ -177,7 +177,7 @@ export function TemplateManagement({ onInsertTemplate }: TemplateManagementProps
               onClick={
                 editingId && showCreate ? handleCreate : editingId ? handleSave : handleCreate
               }
-              className="px-2.5 py-1 text-[10px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+              className="px-3 py-1.5 text-[10px] rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium shadow-sm"
             >
               {showCreate && !editingId ? "创建" : "保存"}
             </button>

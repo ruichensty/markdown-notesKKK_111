@@ -48,12 +48,7 @@ interface HealthReminderState {
   isSnoozed: boolean;
 }
 
-export function useHealthReminder(
-  enabled: boolean,
-  intervalMinutes: number,
-  sessionSeconds: number,
-  focusMode: boolean
-) {
+export function useHealthReminder(enabled: boolean, intervalMinutes: number, focusMode: boolean) {
   const [state, setState] = useState<HealthReminderState>({
     visible: false,
     message: { emoji: "💧", text: "喝杯水吧" },
@@ -61,7 +56,18 @@ export function useHealthReminder(
   });
   const autoCloseTimerRef = useRef<number>(0);
   const recordRef = useRef<ReminderRecord>(loadRecord());
-  const lastTriggeredSessionMinRef = useRef(-1);
+  const sessionSecondsRef = useRef(0);
+  const lastTriggeredBucketRef = useRef(-1);
+  const intervalMinutesRef = useRef(intervalMinutes);
+  const focusModeRef = useRef(focusMode);
+
+  useEffect(() => {
+    intervalMinutesRef.current = intervalMinutes;
+  }, [intervalMinutes]);
+
+  useEffect(() => {
+    focusModeRef.current = focusMode;
+  }, [focusMode]);
 
   const showReminder = useCallback(() => {
     const now = Date.now();
@@ -69,10 +75,10 @@ export function useHealthReminder(
     saveRecord({
       ...recordRef.current,
       lastReminderAt: now,
-      sessionSecondsAtLastReminder: sessionSeconds,
+      sessionSecondsAtLastReminder: sessionSecondsRef.current,
     });
     recordRef.current.lastReminderAt = now;
-    recordRef.current.sessionSecondsAtLastReminder = sessionSeconds;
+    recordRef.current.sessionSecondsAtLastReminder = sessionSecondsRef.current;
     setState({ visible: true, message: msg, isSnoozed: false });
 
     clearTimeout(autoCloseTimerRef.current);
@@ -80,7 +86,7 @@ export function useHealthReminder(
       setState(prev => ({ ...prev, visible: false }));
       saveRecord({ ...recordRef.current, lastDismissedAt: Date.now() });
     }, 30_000);
-  }, [sessionSeconds]);
+  }, []);
 
   const dismiss = useCallback(() => {
     clearTimeout(autoCloseTimerRef.current);
@@ -105,30 +111,34 @@ export function useHealthReminder(
       return;
     }
 
-    if (focusMode) return;
-
     const now = Date.now();
+    const initialIntervalSec = Math.max(1, intervalMinutesRef.current) * 60;
     const record = recordRef.current;
-    const intervalSec = intervalMinutes * 60;
 
-    if (record.snoozeUntil > now) return;
-
-    if (lastTriggeredSessionMinRef.current === -1) {
+    if (lastTriggeredBucketRef.current === -1) {
       const elapsedSinceLastReminder = (now - record.lastReminderAt) / 1000;
-      if (elapsedSinceLastReminder >= intervalSec && record.lastReminderAt > 0) {
-        lastTriggeredSessionMinRef.current = Math.floor(sessionSeconds / intervalSec);
+      if (record.lastReminderAt > 0 && elapsedSinceLastReminder >= initialIntervalSec) {
+        lastTriggeredBucketRef.current = 0;
         window.setTimeout(showReminder, 0);
-        return;
+      } else {
+        lastTriggeredBucketRef.current = 0;
       }
-      lastTriggeredSessionMinRef.current = Math.floor(sessionSeconds / intervalSec);
     }
 
-    const currentBucket = Math.floor(sessionSeconds / intervalSec);
-    if (currentBucket > lastTriggeredSessionMinRef.current) {
-      lastTriggeredSessionMinRef.current = currentBucket;
-      window.setTimeout(showReminder, 0);
-    }
-  }, [enabled, focusMode, intervalMinutes, sessionSeconds, showReminder]);
+    const id = window.setInterval(() => {
+      if (focusModeRef.current) return;
+      sessionSecondsRef.current += 1;
+      if (recordRef.current.snoozeUntil > Date.now()) return;
+      const intervalSec = Math.max(1, intervalMinutesRef.current) * 60;
+      const currentBucket = Math.floor(sessionSecondsRef.current / intervalSec);
+      if (currentBucket > lastTriggeredBucketRef.current) {
+        lastTriggeredBucketRef.current = currentBucket;
+        showReminder();
+      }
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [enabled, showReminder]);
 
   useEffect(() => {
     return () => clearTimeout(autoCloseTimerRef.current);

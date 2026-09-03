@@ -41,21 +41,36 @@ function calcWarmth(): number {
   return 0;
 }
 
-function applyStyle(styleEl: HTMLStyleElement, warmth: number) {
+function applyWarmth(overlay: HTMLDivElement, warmth: number) {
   if (warmth > 0.5) {
-    const sepia = Math.min(0.2, (warmth / 100) * 0.2);
-    const saturate = 1 + (warmth / 100) * 0.1;
-    styleEl.textContent = `.app-shell { filter: sepia(${sepia}) saturate(${saturate}) !important; }`;
+    const alpha = Math.min(0.26, (warmth / 100) * 0.26);
+    overlay.style.opacity = String(alpha);
   } else {
-    styleEl.textContent = "";
+    overlay.style.opacity = "0";
   }
+}
+
+function createOverlay(): HTMLDivElement {
+  const overlay = document.createElement("div");
+  overlay.id = "eyecare-overlay";
+  overlay.style.cssText = [
+    "position: fixed",
+    "inset: 0",
+    "pointer-events: none",
+    "z-index: 2147483000",
+    "background: rgb(255, 196, 148)",
+    "mix-blend-mode: multiply",
+    "opacity: 0",
+  ].join(";");
+  document.body.appendChild(overlay);
+  return overlay;
 }
 
 export function useEyeCare(enabled: boolean) {
   const [state, setState] = useState<EyeCareState>({ warmth: 0, isActive: false });
   const timerRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
-  const styleElRef = useRef<HTMLStyleElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const enabledRef = useRef(enabled);
 
   useEffect(() => {
@@ -70,7 +85,7 @@ export function useEyeCare(enabled: boolean) {
         if (!enabledRef.current) return;
         const warmth = calcWarmth();
         setState({ warmth, isActive: warmth > 0.5 });
-        if (styleElRef.current) applyStyle(styleElRef.current, warmth);
+        if (overlayRef.current) applyWarmth(overlayRef.current, warmth);
         scheduleNext.current();
       });
     }, nextMinute);
@@ -78,25 +93,23 @@ export function useEyeCare(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) {
-      if (styleElRef.current) {
-        styleElRef.current.remove();
-        styleElRef.current = null;
+      if (overlayRef.current) {
+        overlayRef.current.remove();
+        overlayRef.current = null;
       }
       clearTimeout(timerRef.current);
       return;
     }
 
-    if (!styleElRef.current) {
-      styleElRef.current = document.createElement("style");
-      styleElRef.current.id = "eyecare-filter";
-      document.head.appendChild(styleElRef.current);
+    if (!overlayRef.current) {
+      overlayRef.current = createOverlay();
     }
 
     const warmth = calcWarmth();
     /* eslint-disable react-hooks/set-state-in-effect -- syncing external time data into state */
     setState({ warmth, isActive: warmth > 0.5 });
     /* eslint-enable react-hooks/set-state-in-effect */
-    applyStyle(styleElRef.current, warmth);
+    applyWarmth(overlayRef.current, warmth);
     scheduleNext.current();
 
     return () => {

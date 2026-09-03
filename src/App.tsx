@@ -8,7 +8,6 @@ import {
   useSettings,
   useWelcomeNote,
   useEyeCare,
-  useSessionTime,
   useHealthReminder,
   useTemplates,
 } from "@hooks";
@@ -27,11 +26,10 @@ import {
   CommandPalette,
   TemplatePicker,
   TrashView,
-  QimenDunjiaView,
-  CyberDivinationView,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
+import type { Note } from "@types";
 import { applyTemplateVariables } from "@utils/template";
 import { applyAccent } from "./constants/accents";
 
@@ -93,18 +91,14 @@ function AppContent() {
     applyAccent(settings.accentColor, theme);
   }, [settings.accentColor, theme]);
   const eyeCare = useEyeCare(settings.eyeCare);
-  const sessionTime = useSessionTime();
   const healthReminder = useHealthReminder(
     settings.healthReminder,
     settings.reminderInterval,
-    sessionTime.todaySeconds,
     settings.focusMode
   );
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [viewMode, setViewMode] = useState<
-    "home" | "editor" | "preview" | "split" | "qimen" | "cyber"
-  >("home");
+  const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split">("home");
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -112,6 +106,7 @@ function AppContent() {
   const [showTrash, setShowTrash] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
+  const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
   const newNoteLockRef = useRef(false);
 
   const { templates } = useTemplates();
@@ -152,70 +147,85 @@ function AppContent() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
+  const currentNoteRef = useRef<Note | null>(null);
 
-  const handleJumpToLine = (line: number) => {
+  useEffect(() => {
+    currentNoteRef.current = currentNote;
+  }, [currentNote]);
+
+  const handleJumpToLine = useCallback((line: number) => {
     editorRef.current?.scrollToLine(line);
-  };
+  }, []);
 
-  const handleNewNote = (folderIds?: string[], templateId?: string) => {
-    if (newNoteLockRef.current) return;
-    newNoteLockRef.current = true;
+  const handleNewNote = useCallback(
+    (folderIds?: string[], templateId?: string) => {
+      if (newNoteLockRef.current) return;
+      newNoteLockRef.current = true;
 
-    try {
-      let title = "";
-      let content = "";
+      try {
+        let title = "";
+        let content = "";
 
-      if (templateId) {
-        const tpl = templates.find(t => t.id === templateId);
-        if (tpl) {
-          title = tpl.name;
-          content = tpl.content;
+        if (templateId) {
+          const tpl = templates.find(t => t.id === templateId);
+          if (tpl) {
+            title = tpl.name;
+            content = tpl.content;
+          }
         }
+
+        const newNote = createNote({ title, content, folderIds });
+        setViewMode("split");
+        showToast("新笔记已创建", "success");
+
+        if (content) {
+          requestAnimationFrame(() => {
+            const applied = applyTemplateVariables(content, title);
+            updateNote(newNote.id, { title, content: applied });
+          });
+        }
+      } catch (error) {
+        handleStorageError(error as Error);
+      } finally {
+        window.setTimeout(() => {
+          newNoteLockRef.current = false;
+        }, 500);
       }
+    },
+    [templates, createNote, updateNote, showToast, handleStorageError]
+  );
 
-      const newNote = createNote({ title, content, folderIds });
-      setViewMode("split");
-      showToast("新笔记已创建", "success");
-
-      if (content) {
-        requestAnimationFrame(() => {
-          const applied = applyTemplateVariables(content, title);
-          updateNote(newNote.id, { title, content: applied });
-        });
-      }
-    } catch (error) {
-      handleStorageError(error as Error);
-    } finally {
-      window.setTimeout(() => {
-        newNoteLockRef.current = false;
-      }, 500);
-    }
-  };
-
-  const handleNewNoteFromPicker = (templateId: string | undefined) => {
-    handleNewNote(undefined, templateId);
-  };
+  const handleNewNoteFromPicker = useCallback(
+    (templateId: string | undefined) => {
+      handleNewNote(undefined, templateId);
+    },
+    [handleNewNote]
+  );
 
   const handleInsertTemplate = useCallback(
     (templateId: string) => {
       const tpl = templates.find(t => t.id === templateId);
-      if (!tpl || !currentNote) return;
+      const note = currentNoteRef.current;
+      if (!tpl || !note) return;
 
-      const applied = applyTemplateVariables(tpl.content, currentNote.title || "Untitled");
-      const newContent = currentNote.content ? currentNote.content + "\n\n" + applied : applied;
-      updateNote(currentNote.id, { content: newContent });
+      const applied = applyTemplateVariables(tpl.content, note.title || "Untitled");
+      const newContent = note.content ? note.content + "\n\n" + applied : applied;
+      updateNote(note.id, { content: newContent });
       showToast(`已插入模板「${tpl.name}」`, "success");
     },
-    [templates, currentNote, updateNote, showToast]
+    [templates, updateNote, showToast]
   );
 
-  const handleNoteUpdate = (id: string, data: { title?: string; content?: string }) => {
-    try {
-      updateNote(id, data);
-    } catch (error) {
-      handleStorageError(error as Error);
-    }
-  };
+  const handleNoteUpdate = useCallback(
+    (id: string, data: { title?: string; content?: string }) => {
+      try {
+        updateNote(id, data);
+      } catch (error) {
+        handleStorageError(error as Error);
+      }
+    },
+    [updateNote, handleStorageError]
+  );
 
   const handleNoteSelect = useCallback(
     (id: string) => {
@@ -229,40 +239,44 @@ function AppContent() {
     [isMobile, setCurrentNoteId]
   );
 
-  const handleExportMenuToggle = () => {
-    setShowExportMenu(!showExportMenu);
-  };
+  const handleExportMenuToggle = useCallback(() => {
+    setShowExportMenu(prev => !prev);
+  }, []);
 
-  const handleToggleSettings = () => {
-    setShowSettings(!showSettings);
-  };
+  const handleToggleSettings = useCallback(() => {
+    setShowSettings(prev => !prev);
+  }, []);
 
-  const handleToggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
 
-  const handleViewModeChange = (
-    mode: "home" | "editor" | "preview" | "split" | "qimen" | "cyber"
-  ) => {
-    if (isMobile && mode === "split") {
-      setViewMode("editor");
-    } else {
-      setViewMode(mode);
-    }
-  };
-
-  const handleRemoveFolderFromNotes = (folderIds: string[]) => {
-    const folderIdSet = new Set(folderIds);
-    for (const note of allNotes) {
-      if (note.folderIds && note.folderIds.some(id => folderIdSet.has(id))) {
-        updateNote(note.id, {
-          folderIds: note.folderIds.filter(id => !folderIdSet.has(id)),
-        });
+  const handleViewModeChange = useCallback(
+    (mode: "home" | "editor" | "preview" | "split") => {
+      if (isMobile && mode === "split") {
+        setViewMode("editor");
+      } else {
+        setViewMode(mode);
       }
-    }
-  };
+    },
+    [isMobile]
+  );
 
-  const handleGoHome = () => {
+  const handleRemoveFolderFromNotes = useCallback(
+    (folderIds: string[]) => {
+      const folderIdSet = new Set(folderIds);
+      for (const note of allNotes) {
+        if (note.folderIds && note.folderIds.some(id => folderIdSet.has(id))) {
+          updateNote(note.id, {
+            folderIds: note.folderIds.filter(id => !folderIdSet.has(id)),
+          });
+        }
+      }
+    },
+    [allNotes, updateNote]
+  );
+
+  const handleGoHome = useCallback(() => {
     setCurrentNoteId(null);
     setViewMode("home");
     if (
@@ -272,11 +286,120 @@ function AppContent() {
     ) {
       setSidebarOpen(false);
     }
-  };
+  }, [setCurrentNoteId, settings.homeLayout]);
 
-  const handleSplitDrag = useCallback((e: React.MouseEvent) => {
+  const handleOpenInEditor = useCallback(
+    (id: string) => {
+      handleNoteSelect(id);
+      setViewMode(isMobile ? "editor" : "split");
+    },
+    [handleNoteSelect, isMobile]
+  );
+
+  const handleStartNewNote = useCallback(() => {
+    if (templates.length > 0) {
+      setShowTemplatePicker(true);
+    } else {
+      handleNewNote();
+    }
+  }, [templates.length, handleNewNote]);
+
+  const handleCloseCommandPalette = useCallback(() => {
+    setShowCommandPalette(false);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
+
+  const handleCloseTemplatePicker = useCallback(() => {
+    setShowTemplatePicker(false);
+  }, []);
+
+  const handleOpenTrash = useCallback(() => {
+    setShowTrash(true);
+  }, []);
+
+  const handleCloseTrash = useCallback(() => {
+    setShowTrash(false);
+  }, []);
+
+  const handleRestoreFromTrash = useCallback(
+    (id: string) => {
+      restoreNote(id);
+      showToast("笔记已恢复", "success");
+    },
+    [restoreNote, showToast]
+  );
+
+  const handlePurgeFromTrash = useCallback(
+    (id: string) => {
+      purgeNote(id);
+      showToast("已永久删除", "success");
+    },
+    [purgeNote, showToast]
+  );
+
+  const handleEmptyTrash = useCallback(() => {
+    emptyTrash();
+    showToast("回收站已清空", "success");
+  }, [emptyTrash, showToast]);
+
+  const handleExpandedFoldersChange = useCallback(
+    (ids: string[]) => {
+      updateSettings({ expandedFolders: ids });
+    },
+    [updateSettings]
+  );
+
+  const handleClearFolderSelection = useCallback(() => {
+    setSelectedFolderId(null);
+  }, []);
+
+  const handleToggleFocusMode = useCallback(() => {
+    updateSettings({ focusMode: !settings.focusMode });
+  }, [updateSettings, settings.focusMode]);
+
+  const handleToggleTypewriterMode = useCallback(() => {
+    updateSettings({ typewriterMode: !settings.typewriterMode });
+  }, [updateSettings, settings.typewriterMode]);
+
+  const handleEditorSave = useCallback(() => {
+    void saveNow()
+      .then(saved => {
+        if (saved) showToast("笔记已保存", "success");
+      })
+      .catch(() => {});
+  }, [saveNow, showToast]);
+
+  const handleDoodleClear = useCallback(() => {
+    showToast("涂鸦已清除", "success");
+  }, [showToast]);
+
+  const handlePaletteSelectNote = useCallback(
+    (id: string) => {
+      setSelectedFolderId(null);
+      handleNoteSelect(id);
+      if (viewMode === "home") setViewMode(isMobile ? "editor" : "split");
+    },
+    [handleNoteSelect, viewMode, isMobile]
+  );
+
+  const handlePaletteSelectFolder = useCallback((id: string) => {
+    setSelectedFolderId(id);
+    setSidebarOpen(true);
+  }, []);
+
+  const handlePaletteNewNote = useCallback(
+    (templateId?: string) => {
+      handleNewNote(undefined, templateId);
+    },
+    [handleNewNote]
+  );
+
+  const handleSplitDrag = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
-    const container = (e.target as HTMLElement).parentElement;
+    const container = (e.currentTarget as HTMLElement).parentElement;
     if (!container) return;
     const startX = e.clientX;
     const startWidth = container.getBoundingClientRect().width;
@@ -284,22 +407,51 @@ function AppContent() {
     if (!leftPane) return;
     const startLeftWidth = leftPane.getBoundingClientRect().width;
 
-    const onMouseMove = (ev: MouseEvent) => {
+    const onPointerMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
       const newLeftWidth = Math.max(200, Math.min(startWidth - 200, startLeftWidth + dx));
       setSplitRatio(newLeftWidth / startWidth);
     };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+    const onPointerUp = () => {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
   }, []);
+
+  const handleSidebarResize = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      const frame = (e.currentTarget as HTMLElement).parentElement;
+      if (!frame) return;
+      const startX = e.clientX;
+      const startWidth = frame.getBoundingClientRect().width;
+      const clampWidth = (width: number) => Math.max(220, Math.min(460, width));
+
+      const onPointerMove = (ev: PointerEvent) => {
+        setSidebarDragWidth(clampWidth(startWidth + (ev.clientX - startX)));
+      };
+      const onPointerUp = (ev: PointerEvent) => {
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        const next = clampWidth(startWidth + (ev.clientX - startX));
+        setSidebarDragWidth(null);
+        updateSettings({ sidebarWidth: next });
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    },
+    [updateSettings]
+  );
 
   const handleAttachmentAdd = useCallback(
     (
@@ -482,42 +634,31 @@ function AppContent() {
     <>
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">
         <ParticleBackground
-          hidden={settings.focusMode || settings.typewriterMode}
+          hidden={settings.focusMode || settings.typewriterMode || !settings.particleEffects}
           isMobile={isMobile}
         />
-        {isMobile &&
-          sidebarOpen &&
-          viewMode !== "home" &&
-          viewMode !== "qimen" &&
-          viewMode !== "cyber" && (
-            <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-          )}
-        {viewMode !== "home" && viewMode !== "qimen" && viewMode !== "cyber" && (
-          <div className="workspace-sidebar-frame">
+        {isMobile && sidebarOpen && viewMode !== "home" && (
+          <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        )}
+        {viewMode !== "home" && (
+          <div
+            className={`workspace-sidebar-frame ${sidebarDragWidth !== null ? "sidebar-resizing" : ""}`}
+          >
             <NoteList
               notes={notes}
               activeNoteId={currentNoteId}
-              onNoteSelect={id => {
-                handleNoteSelect(id);
-                setViewMode(isMobile ? "editor" : "split");
-              }}
-              onNewNote={() => {
-                if (templates.length > 0) {
-                  setShowTemplatePicker(true);
-                } else {
-                  handleNewNote();
-                }
-              }}
+              onNoteSelect={handleOpenInEditor}
+              onNewNote={handleStartNewNote}
               onNoteDelete={handleNoteDelete}
               onRemoveFolderFromNotes={handleRemoveFolderFromNotes}
               onReorderNotes={reorderNotes}
               onReorderNotesInFolder={reorderNotesInFolder}
               expandedFolders={settings.expandedFolders}
-              onExpandedFoldersChange={ids => updateSettings({ expandedFolders: ids })}
+              onExpandedFoldersChange={handleExpandedFoldersChange}
               onBatchMoveToFolder={handleBatchMoveToFolder}
               searchInputRef={searchInputRef}
               getFormattedDate={getFormattedDate}
-              sidebarWidth={settings.sidebarWidth}
+              sidebarWidth={sidebarDragWidth ?? settings.sidebarWidth}
               collapsed={!sidebarOpen}
               currentNoteContent={currentNote?.content}
               onJumpToLine={handleJumpToLine}
@@ -528,63 +669,45 @@ function AppContent() {
               onCopyNote={handleCopyNote}
               onReorderFolder={handleReorderFolder}
               trashCount={trashedNotes.length}
-              onOpenTrash={() => setShowTrash(true)}
+              onOpenTrash={handleOpenTrash}
               selectedFolderId={selectedFolderId}
-              onClearFolderSelection={() => setSelectedFolderId(null)}
+              onClearFolderSelection={handleClearFolderSelection}
             />
+            {!isMobile && sidebarOpen && (
+              <div
+                className="sidebar-resize-handle"
+                onPointerDown={handleSidebarResize}
+                title="拖拽调整侧栏宽度"
+              />
+            )}
           </div>
         )}
 
         <div className="content-area flex-1 flex flex-col min-w-0 overflow-hidden relative">
-          {viewMode !== "qimen" && viewMode !== "cyber" && (
-            <Toolbar
-              currentNote={currentNote}
-              onNewNote={() => {
-                if (templates.length > 0) {
-                  setShowTemplatePicker(true);
-                } else {
-                  handleNewNote();
-                }
-              }}
-              showExportMenu={showExportMenu}
-              onToggleExportMenu={handleExportMenuToggle}
-              onToggleSidebar={handleToggleSidebar}
-              viewMode={viewMode}
-              onViewModeChange={handleViewModeChange}
-              onToggleSettings={handleToggleSettings}
-              onGoHome={handleGoHome}
-              focusMode={settings.focusMode}
-              typewriterMode={settings.typewriterMode}
-              onToggleFocusMode={() => updateSettings({ focusMode: !settings.focusMode })}
-              onToggleTypewriterMode={() =>
-                updateSettings({ typewriterMode: !settings.typewriterMode })
-              }
-              isMobile={isMobile}
-            />
-          )}
+          <Toolbar
+            currentNote={currentNote}
+            onNewNote={handleStartNewNote}
+            showExportMenu={showExportMenu}
+            onToggleExportMenu={handleExportMenuToggle}
+            onToggleSidebar={handleToggleSidebar}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
+            onToggleSettings={handleToggleSettings}
+            onGoHome={handleGoHome}
+            focusMode={settings.focusMode}
+            typewriterMode={settings.typewriterMode}
+            onToggleFocusMode={handleToggleFocusMode}
+            onToggleTypewriterMode={handleToggleTypewriterMode}
+            isMobile={isMobile}
+          />
 
           <div className="flex-1 flex overflow-hidden relative">
-            {viewMode === "cyber" ? (
-              <CyberDivinationView onBack={handleGoHome} onOpenQimen={() => setViewMode("qimen")} />
-            ) : viewMode === "qimen" ? (
-              <QimenDunjiaView onBack={handleGoHome} />
-            ) : viewMode === "home" ? (
+            {viewMode === "home" ? (
               <HomeView
-                onNewNote={() => {
-                  if (templates.length > 0) {
-                    setShowTemplatePicker(true);
-                  } else {
-                    handleNewNote();
-                  }
-                }}
+                onNewNote={handleStartNewNote}
                 notes={allNotes}
-                onNoteSelect={id => {
-                  handleNoteSelect(id);
-                  setViewMode(isMobile ? "editor" : "split");
-                }}
+                onNoteSelect={handleOpenInEditor}
                 layout={settings.homeLayout}
-                onOpenQimen={() => setViewMode("qimen")}
-                onOpenCyber={() => setViewMode("cyber")}
               />
             ) : currentNote ? (
               <div className="flex-1 flex min-w-0">
@@ -606,13 +729,7 @@ function AppContent() {
                       ref={editorRef}
                       note={currentNote}
                       onUpdate={handleNoteUpdate}
-                      onSave={() => {
-                        void saveNow()
-                          .then(saved => {
-                            if (saved) showToast("笔记已保存", "success");
-                          })
-                          .catch(() => {});
-                      }}
+                      onSave={handleEditorSave}
                       fontSize={settings.fontSize}
                       lineHeight={settings.lineHeight}
                       fontFamily={settings.fontFamily}
@@ -621,14 +738,12 @@ function AppContent() {
                       autoPair={settings.autoPair}
                       isMobile={isMobile}
                       typingSound={settings.typingSound}
-                      onAttachmentAdd={attachment =>
-                        handleAttachmentAdd(currentNote.id, attachment)
-                      }
+                      onAttachmentAdd={handleAttachmentAdd}
                     />
                   </div>
                 )}
                 {viewMode === "split" && (
-                  <div className="split-handle" onMouseDown={handleSplitDrag} />
+                  <div className="split-handle" onPointerDown={handleSplitDrag} />
                 )}
                 {(viewMode === "preview" || viewMode === "split") && (
                   <Suspense
@@ -645,31 +760,15 @@ function AppContent() {
               </div>
             ) : (
               <HomeView
-                onNewNote={handleNewNote}
+                onNewNote={handleStartNewNote}
                 notes={allNotes}
-                onNoteSelect={id => {
-                  handleNoteSelect(id);
-                  setViewMode(isMobile ? "editor" : "split");
-                }}
+                onNoteSelect={handleOpenInEditor}
                 layout={settings.homeLayout}
-                onOpenQimen={() => setViewMode("qimen")}
-                onOpenCyber={() => setViewMode("cyber")}
               />
             )}
 
-            <SettingsPanel
-              isOpen={showSettings}
-              onClose={() => setShowSettings(false)}
-              settings={settings}
-              onUpdate={updateSettings}
-              onInsertTemplate={handleInsertTemplate}
-            />
-
             {settings.doodleLayer && currentNote && (
-              <DoodleCanvas
-                visible={settings.doodleLayer}
-                onClear={() => showToast("涂鸦已清除", "success")}
-              />
+              <DoodleCanvas visible={settings.doodleLayer} onClear={handleDoodleClear} />
             )}
           </div>
 
@@ -706,52 +805,43 @@ function AppContent() {
         onDismiss={healthReminder.dismiss}
         onSnooze={healthReminder.snooze}
       />
+      <SettingsPanel
+        isOpen={showSettings}
+        onClose={handleCloseSettings}
+        settings={settings}
+        onUpdate={updateSettings}
+        onInsertTemplate={handleInsertTemplate}
+      />
       <CommandPalette
         open={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
+        onClose={handleCloseCommandPalette}
         notes={allNotes}
         folders={folders}
         templates={templates}
-        onSelectNote={id => {
-          setSelectedFolderId(null);
-          handleNoteSelect(id);
-          if (viewMode === "home") setViewMode(isMobile ? "editor" : "split");
-        }}
-        onSelectFolder={id => {
-          setSelectedFolderId(id);
-          setSidebarOpen(true);
-        }}
-        onNewNote={templateId => handleNewNote(undefined, templateId)}
+        onSelectNote={handlePaletteSelectNote}
+        onSelectFolder={handlePaletteSelectFolder}
+        onNewNote={handlePaletteNewNote}
         onToggleTheme={toggleTheme}
         onToggleSettings={handleToggleSettings}
-        onToggleFocusMode={() => updateSettings({ focusMode: !settings.focusMode })}
-        onToggleTypewriterMode={() => updateSettings({ typewriterMode: !settings.typewriterMode })}
+        onToggleFocusMode={handleToggleFocusMode}
+        onToggleTypewriterMode={handleToggleTypewriterMode}
         onGoHome={handleGoHome}
         focusMode={settings.focusMode}
         typewriterMode={settings.typewriterMode}
       />
       <TemplatePicker
         open={showTemplatePicker}
-        onClose={() => setShowTemplatePicker(false)}
+        onClose={handleCloseTemplatePicker}
         templates={templates}
         onSelect={handleNewNoteFromPicker}
       />
       <TrashView
         open={showTrash}
-        onClose={() => setShowTrash(false)}
+        onClose={handleCloseTrash}
         notes={trashedNotes}
-        onRestore={id => {
-          restoreNote(id);
-          showToast("笔记已恢复", "success");
-        }}
-        onPurge={id => {
-          purgeNote(id);
-          showToast("已永久删除", "success");
-        }}
-        onEmptyTrash={() => {
-          emptyTrash();
-          showToast("回收站已清空", "success");
-        }}
+        onRestore={handleRestoreFromTrash}
+        onPurge={handlePurgeFromTrash}
+        onEmptyTrash={handleEmptyTrash}
       />
     </>
   );

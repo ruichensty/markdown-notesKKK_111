@@ -33,8 +33,6 @@ interface HomeViewProps {
   notes?: Note[];
   onNoteSelect?: (id: string) => void;
   layout?: HomeLayout;
-  onOpenQimen?: () => void;
-  onOpenCyber?: () => void;
 }
 
 function countWords(text: string): number {
@@ -70,7 +68,7 @@ function NewNoteButton({ onNewNote }: { onNewNote: () => void }) {
   return (
     <button
       onClick={onNewNote}
-      className="group inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 active:scale-95 transition-all duration-200 text-sm font-semibold shadow-[0_8px_24px_hsl(var(--primary)/0.24)] hover:shadow-[0_14px_36px_hsl(var(--primary)/0.32)] hover:-translate-y-0.5"
+      className="group inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-full hover:bg-primary/92 active:scale-95 transition-all duration-200 text-sm font-semibold shadow-[0_8px_24px_hsl(var(--primary)/0.24)] hover:shadow-[0_12px_32px_hsl(var(--primary)/0.32)] hover:-translate-y-0.5"
     >
       <svg
         className="w-4 h-4 transition-transform duration-300 group-hover:rotate-90"
@@ -86,15 +84,7 @@ function NewNoteButton({ onNewNote }: { onNewNote: () => void }) {
   );
 }
 
-function HomeNavbar({
-  onNewNote,
-  onOpenQimen,
-  onOpenCyber,
-}: {
-  onNewNote: () => void;
-  onOpenQimen?: () => void;
-  onOpenCyber?: () => void;
-}) {
+function HomeNavbar({ onNewNote }: { onNewNote: () => void }) {
   const links = ["Explore", "Collections", "Flows", "Patterns"];
 
   return (
@@ -116,12 +106,6 @@ function HomeNavbar({
       </div>
 
       <div className="mobbin-home-actions">
-        <button type="button" onClick={onOpenQimen} className="mobbin-home-login">
-          奇门图
-        </button>
-        <button type="button" onClick={onOpenCyber} className="mobbin-home-login">
-          赛博算卦
-        </button>
         <button type="button" onClick={onNewNote} className="mobbin-home-join">
           New note
         </button>
@@ -253,14 +237,10 @@ const DashboardLayout = memo(function DashboardLayout({
   onNewNote,
   notes,
   onNoteSelect,
-  onOpenQimen,
-  onOpenCyber,
 }: {
   onNewNote: () => void;
   notes: Note[];
   onNoteSelect?: (id: string) => void;
-  onOpenQimen?: () => void;
-  onOpenCyber?: () => void;
 }) {
   const stats = useMemo(() => {
     const totalNotes = notes.length;
@@ -277,13 +257,13 @@ const DashboardLayout = memo(function DashboardLayout({
 
   return (
     <div className="mobbin-home-shell relative z-10 w-full max-w-6xl mx-auto px-5 sm:px-8 lg:px-10">
-      <HomeNavbar onNewNote={onNewNote} onOpenQimen={onOpenQimen} onOpenCyber={onOpenCyber} />
-      <div className="mobbin-hero-card mb-5">
+      <HomeNavbar onNewNote={onNewNote} />
+      <div className="mobbin-hero-card mb-6">
         <div>
           <p className="mobbin-eyebrow">Searchable workspace</p>
-          <h1 className="mobbin-hero-title">像浏览设计案例一样，快速回到你的笔记流。</h1>
+          <h1 className="mobbin-hero-title">像浏览灵感库一样，快速回到你的笔记流。</h1>
           <p className="mobbin-hero-subtitle">
-            收集、筛选、继续书写，把灵感整理成可复用的知识屏幕。
+            收集、筛选、继续书写，把想法整理成可复用的知识屏幕。
           </p>
         </div>
         <NewNoteButton onNewNote={onNewNote} />
@@ -558,8 +538,6 @@ export function HomeView({
   notes = [],
   onNoteSelect,
   layout = "writer",
-  onOpenQimen,
-  onOpenCyber,
 }: HomeViewProps) {
   return (
     <div className="home-view flex-1 flex flex-col bg-background relative overflow-y-auto overflow-x-hidden min-h-0">
@@ -584,13 +562,7 @@ export function HomeView({
           )}
           {layout === "dashboard" && (
             <div className="home-layout-frame home-layout-frame--dashboard flex-1 flex items-start justify-center py-8 sm:py-12">
-              <DashboardLayout
-                onNewNote={onNewNote}
-                notes={notes}
-                onNoteSelect={onNoteSelect}
-                onOpenQimen={onOpenQimen}
-                onOpenCyber={onOpenCyber}
-              />
+              <DashboardLayout onNewNote={onNewNote} notes={notes} onNoteSelect={onNoteSelect} />
             </div>
           )}
           {layout === "writer" && (

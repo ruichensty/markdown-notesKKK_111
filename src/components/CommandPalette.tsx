@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import type { Note, Folder, NoteTemplate } from "@types";
 import { useDialogA11y } from "@hooks";
 
@@ -56,7 +56,7 @@ function fuzzyMatch(query: string, text: string): { matched: boolean; score: num
   return { matched: false, score: 0 };
 }
 
-export function CommandPalette({
+function CommandPaletteBase({
   open,
   onClose,
   notes,
@@ -296,19 +296,19 @@ export function CommandPalette({
 
   return (
     <div className="fixed inset-0 z-[99998] flex items-start justify-center pt-[15vh]">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-foreground/25 backdrop-blur-sm" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="command-palette relative w-[560px] max-w-[90vw] max-h-[50vh] bg-popover border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-scale-in"
+        className="command-palette relative w-[600px] max-w-[92vw] max-h-[56vh] bg-popover/95 border border-border/60 rounded-2xl shadow-[0_28px_80px_hsl(var(--foreground)/0.16)] flex flex-col overflow-hidden animate-scale-in backdrop-blur-xl"
       >
         <h2 id={titleId} className="sr-only">
           命令面板
         </h2>
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border/50 bg-gradient-to-b from-card/40 to-transparent">
           <svg
             className="w-4 h-4 text-muted-foreground shrink-0"
             fill="none"
@@ -328,12 +328,12 @@ export function CommandPalette({
             aria-label="搜索笔记、模板或操作"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
           />
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-muted-foreground/50 bg-muted rounded border border-border font-mono">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-1 text-[10px] text-muted-foreground/50 bg-muted/60 rounded-lg border border-border/60 font-mono">
             ESC
           </kbd>
         </div>
 
-        <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin py-1.5 px-1.5">
+        <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin py-2 px-2">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/50">
               <svg
@@ -352,7 +352,7 @@ export function CommandPalette({
           ) : (
             groupedItems.map(group => (
               <div key={group.group} className="mb-1">
-                <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">
+                <div className="px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
                   {group.group}
                 </div>
                 {group.items.map(item => {
@@ -363,10 +363,10 @@ export function CommandPalette({
                       key={item.id}
                       onClick={() => item.action()}
                       onMouseEnter={() => setActiveIdx(idx)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all ${
                         isActive
-                          ? "bg-primary/10 text-foreground"
-                          : "text-muted-foreground hover:bg-muted/60"
+                          ? "bg-primary/10 text-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       }`}
                     >
                       <span className={`shrink-0 ${isActive ? "text-primary" : ""}`}>
@@ -435,7 +435,7 @@ export function CommandPalette({
                           </svg>
                         )}
                       </span>
-                      <span className="text-xs truncate">{item.label}</span>
+                      <span className="text-xs font-medium truncate">{item.label}</span>
                     </button>
                   );
                 })}
@@ -444,17 +444,23 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-border text-[10px] text-muted-foreground/50">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-border/50 bg-muted/20 text-[10px] text-muted-foreground/50">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border font-mono">↑↓</kbd>
+            <kbd className="px-1.5 py-0.5 bg-muted/70 rounded-md border border-border/60 font-mono">
+              ↑↓
+            </kbd>
             <span>选择</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border font-mono">↵</kbd>
+            <kbd className="px-1.5 py-0.5 bg-muted/70 rounded-md border border-border/60 font-mono">
+              ↵
+            </kbd>
             <span>确认</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border font-mono">Esc</kbd>
+            <kbd className="px-1.5 py-0.5 bg-muted/70 rounded-md border border-border/60 font-mono">
+              Esc
+            </kbd>
             <span>关闭</span>
           </span>
         </div>
@@ -462,3 +468,5 @@ export function CommandPalette({
     </div>
   );
 }
+
+export const CommandPalette = memo(CommandPaletteBase);

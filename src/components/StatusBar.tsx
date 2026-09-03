@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import type { Note, SaveStatus } from "@types";
 import { useStorageEstimate } from "@hooks";
 
@@ -48,14 +48,15 @@ const saveStatusLabel: Record<SaveStatus, string> = {
   error: "保存失败",
 };
 
-export function StatusBar({
+function StatusBarBase({
   allNotes,
   currentNote,
   saveStatus = "saved",
   onRetrySave,
 }: StatusBarProps) {
   const totalCount = allNotes.length;
-  const storage = useStorageEstimate(currentNote?.updatedAt ?? totalCount);
+  const storageRefreshKey = `${totalCount}:${Math.floor((currentNote?.updatedAt ?? 0) / 30000)}`;
+  const storage = useStorageEstimate(storageRefreshKey);
 
   const stats = useMemo(() => {
     if (!currentNote) return null;
@@ -117,3 +118,5 @@ export function StatusBar({
     </div>
   );
 }
+
+export const StatusBar = memo(StatusBarBase);

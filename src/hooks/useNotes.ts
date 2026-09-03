@@ -80,34 +80,43 @@ export function useNotes(selectedFolderId: string | null = null) {
 
       if (added.length === 0 && updated.length === 0 && deleted.length === 0) return false;
 
-      setSaveStatus(isRetry ? "retrying" : "saving");
+      let statusTimer = 0;
+      if (isRetry) {
+        setSaveStatus("retrying");
+      } else {
+        statusTimer = window.setTimeout(() => setSaveStatus("saving"), 150);
+      }
 
-      for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS_MS.length; attempt += 1) {
-        try {
-          for (const note of added) await saveSingleNote(note);
-          for (const note of updated) {
-            const latest = await loadSingleNote(note.id);
-            if (!latest) continue;
-            if (latest.updatedAt > note.updatedAt) continue;
-            await saveSingleNote(note);
-          }
-          for (const note of deleted) await deleteSingleNote(note.id);
-          prevNotesRef.current = snapshot;
-          broadcastNotesChanged(updated[0]?.id ?? added[0]?.id ?? deleted[0]?.id);
-          setSaveError(false);
-          setSaveStatus("saved");
-          return true;
-        } catch (error) {
-          if (attempt === SAVE_RETRY_DELAYS_MS.length) {
-            console.error("Failed to save notes:", error);
-            setSaveError(true);
-            setSaveStatus("error");
-            throw error;
-          }
+      try {
+        for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS_MS.length; attempt += 1) {
+          try {
+            for (const note of added) await saveSingleNote(note);
+            for (const note of updated) {
+              const latest = await loadSingleNote(note.id);
+              if (!latest) continue;
+              if (latest.updatedAt > note.updatedAt) continue;
+              await saveSingleNote(note);
+            }
+            for (const note of deleted) await deleteSingleNote(note.id);
+            prevNotesRef.current = snapshot;
+            broadcastNotesChanged(updated[0]?.id ?? added[0]?.id ?? deleted[0]?.id);
+            setSaveError(false);
+            setSaveStatus("saved");
+            return true;
+          } catch (error) {
+            if (attempt === SAVE_RETRY_DELAYS_MS.length) {
+              console.error("Failed to save notes:", error);
+              setSaveError(true);
+              setSaveStatus("error");
+              throw error;
+            }
 
-          setSaveStatus("retrying");
-          await sleep(SAVE_RETRY_DELAYS_MS[attempt]);
+            setSaveStatus("retrying");
+            await sleep(SAVE_RETRY_DELAYS_MS[attempt]);
+          }
         }
+      } finally {
+        clearTimeout(statusTimer);
       }
 
       return false;

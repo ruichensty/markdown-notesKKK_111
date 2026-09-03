@@ -642,9 +642,28 @@ function NoteList({
   );
 }
 
+function sameNotes(a: Note[], b: Note[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id ||
+      x.updatedAt !== y.updatedAt ||
+      x.title !== y.title ||
+      x.order !== y.order ||
+      x.deletedAt !== y.deletedAt
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export default memo(NoteList, (prevProps, nextProps) => {
   return (
-    prevProps.notes === nextProps.notes &&
+    sameNotes(prevProps.notes, nextProps.notes) &&
     prevProps.activeNoteId === nextProps.activeNoteId &&
     prevProps.getFormattedDate === nextProps.getFormattedDate &&
     prevProps.onNoteSelect === nextProps.onNoteSelect &&
@@ -659,6 +678,17 @@ export default memo(NoteList, (prevProps, nextProps) => {
     prevProps.onCopyNote === nextProps.onCopyNote &&
     prevProps.onReorderFolder === nextProps.onReorderFolder &&
     prevProps.trashCount === nextProps.trashCount &&
-    prevProps.onOpenTrash === nextProps.onOpenTrash
+    prevProps.onOpenTrash === nextProps.onOpenTrash &&
+    prevProps.onRemoveFolderFromNotes === nextProps.onRemoveFolderFromNotes &&
+    prevProps.onReorderNotes === nextProps.onReorderNotes &&
+    prevProps.onReorderNotesInFolder === nextProps.onReorderNotesInFolder &&
+    prevProps.onExpandedFoldersChange === nextProps.onExpandedFoldersChange &&
+    prevProps.onJumpToLine === nextProps.onJumpToLine &&
+    prevProps.onClearFolderSelection === nextProps.onClearFolderSelection &&
+    prevProps.sidebarWidth === nextProps.sidebarWidth &&
+    prevProps.collapsed === nextProps.collapsed &&
+    prevProps.selectedFolderId === nextProps.selectedFolderId &&
+    prevProps.expandedFolders === nextProps.expandedFolders &&
+    prevProps.isMobile === nextProps.isMobile
   );
 });

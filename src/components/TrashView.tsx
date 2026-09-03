@@ -66,18 +66,18 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="flex flex-col w-full max-w-lg max-h-[80vh] rounded-2xl border border-border/70 bg-popover shadow-[0_24px_64px_hsl(222_47%_11%/0.18)] overflow-hidden"
+        className="flex flex-col w-full max-w-lg max-h-[80vh] rounded-2xl border border-border/60 bg-popover/95 shadow-[0_24px_64px_hsl(var(--foreground)/0.14)] overflow-hidden backdrop-blur-xl"
         style={{
           transform: visible ? "scale(1) translateY(0)" : "scale(0.96) translateY(8px)",
           opacity: visible ? 1 : 0,
           transition: "transform 0.22s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease",
         }}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 bg-gradient-to-b from-card/40 to-transparent">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
               <svg
-                className="w-4 h-4 text-muted-foreground"
+                className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -101,7 +101,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
           </div>
           <button
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
             aria-label="关闭"
           >
             <svg
@@ -136,11 +136,11 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
               <p className="text-xs text-muted-foreground/40 mt-1">删除的笔记会暂存在这里</p>
             </div>
           ) : (
-            <ul className="p-2">
+            <ul className="p-2.5 space-y-1.5">
               {notes.map(note => (
                 <li
                   key={note.id}
-                  className="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/60 transition-colors"
+                  className="group flex items-center gap-3 rounded-xl border border-border/35 bg-card/35 px-3 py-3 hover:bg-muted/55 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -158,7 +158,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => onRestore(note.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                       title="恢复"
                     >
                       <svg
@@ -178,7 +178,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                     </button>
                     <button
                       onClick={() => setPurgeTarget(note.id)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                       title="永久删除"
                     >
                       <svg
@@ -203,7 +203,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
         </div>
 
         {notes.length > 0 && (
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border bg-muted/30">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border/50 bg-muted/25">
             <span className="text-[10px] text-muted-foreground/70">恢复的笔记会回到原来的位置</span>
             {confirmEmpty ? (
               <div className="flex items-center gap-2">
@@ -213,13 +213,13 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                     onEmptyTrash();
                     setConfirmEmpty(false);
                   }}
-                  className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
                 >
                   清空
                 </button>
                 <button
                   onClick={() => setConfirmEmpty(false)}
-                  className="px-2.5 py-1 rounded-md text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors"
                 >
                   取消
                 </button>
@@ -227,7 +227,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
             ) : (
               <button
                 onClick={() => setConfirmEmpty(true)}
-                className="px-3 py-1.5 rounded-md text-[11px] font-medium text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
+                className="px-3.5 py-1.5 rounded-lg text-[11px] font-medium text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
               >
                 清空回收站
               </button>
@@ -244,7 +244,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="rounded-xl border border-border bg-popover p-5 max-w-xs shadow-2xl"
+            className="rounded-2xl border border-border/60 bg-popover/95 p-5 max-w-xs shadow-[0_24px_64px_hsl(var(--foreground)/0.16)] backdrop-blur-xl"
           >
             <h3 className="text-sm font-semibold text-foreground mb-1.5">永久删除</h3>
             <p className="text-xs text-muted-foreground leading-relaxed mb-4">
@@ -253,7 +253,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setPurgeTarget(null)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+                className="px-3.5 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
               >
                 取消
               </button>
@@ -262,7 +262,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                   onPurge(purgeTarget);
                   setPurgeTarget(null);
                 }}
-                className="px-3 py-1.5 rounded-md text-xs font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+                className="px-3.5 py-2 rounded-xl text-xs font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
               >
                 永久删除
               </button>
