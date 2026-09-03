@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
+import type { AiProviderId } from "@types";
 
 export interface Settings {
   fontSize: "sm" | "md" | "lg" | number;
@@ -20,6 +21,12 @@ export interface Settings {
   homeLayout: "quotes" | "dashboard" | "minimal" | "curtain" | "writer";
   expandedFolders: string[];
   particleEffects: boolean;
+  aiAssistant: boolean;
+  aiWidgetPos: { x: number; y: number } | null;
+  aiProvider: AiProviderId;
+  aiApiBaseUrl: string;
+  aiApiKey: string;
+  aiModel: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +48,12 @@ const DEFAULT_SETTINGS: Settings = {
   homeLayout: "dashboard",
   expandedFolders: [],
   particleEffects: true,
+  aiAssistant: true,
+  aiWidgetPos: null,
+  aiProvider: "zhipu",
+  aiApiBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+  aiApiKey: "",
+  aiModel: "glm-4-flash",
 };
 
 const SETTINGS_KEY = "settings";

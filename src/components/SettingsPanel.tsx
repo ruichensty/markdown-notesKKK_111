@@ -1,5 +1,7 @@
 import { useState, useEffect, memo } from "react";
 import type { Settings } from "@hooks/useSettings";
+import type { AiProviderId } from "@types";
+import { AI_PROVIDER_PRESETS, getPreset } from "@utils/aiClient";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
@@ -396,6 +398,117 @@ function SettingsPanelBase({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="settings-section pt-2 border-t border-border/50">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+              AI 助手
+            </label>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-foreground">显示机器人</span>
+                  <span className="text-[10px] text-muted-foreground ml-1.5">可拖动的对话助手</span>
+                </div>
+                <button
+                  onClick={() => handleChange("aiAssistant", !settings.aiAssistant)}
+                  className={`relative w-10 h-6 rounded-full transition-colors ${settings.aiAssistant ? "bg-primary" : "bg-muted"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${settings.aiAssistant ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1">服务商</label>
+                <select
+                  className="settings-ai-select"
+                  value={settings.aiProvider}
+                  onChange={e => {
+                    const id = e.target.value as AiProviderId;
+                    if (id === "custom") {
+                      handleChange("aiProvider", id);
+                    } else {
+                      const preset = getPreset(id);
+                      onUpdate({
+                        aiProvider: id,
+                        aiApiBaseUrl: preset.baseUrl,
+                        aiModel: preset.model,
+                      });
+                    }
+                  }}
+                >
+                  {AI_PROVIDER_PRESETS.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1">
+                  API 地址（Base URL，OpenAI 兼容）
+                </label>
+                <input
+                  type="text"
+                  className="settings-ai-input"
+                  value={settings.aiApiBaseUrl}
+                  onChange={e => handleChange("aiApiBaseUrl", e.target.value)}
+                  placeholder="https://…/v1"
+                  spellCheck={false}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1">
+                  API Key（仅保存在本机）
+                </label>
+                <input
+                  type="password"
+                  className="settings-ai-input"
+                  value={settings.aiApiKey}
+                  onChange={e => handleChange("aiApiKey", e.target.value)}
+                  placeholder="sk-…"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                {getPreset(settings.aiProvider).keyUrl && (
+                  <a
+                    href={getPreset(settings.aiProvider).keyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-primary hover:underline mt-1 inline-block"
+                  >
+                    获取 {getPreset(settings.aiProvider).label} API Key ↗
+                  </a>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1">模型名称</label>
+                <input
+                  type="text"
+                  className="settings-ai-input"
+                  value={settings.aiModel}
+                  onChange={e => handleChange("aiModel", e.target.value)}
+                  placeholder="glm-4-flash"
+                  spellCheck={false}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground">机器人位置</span>
+                <button
+                  type="button"
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => onUpdate({ aiWidgetPos: null })}
+                >
+                  重置到默认位置
+                </button>
+              </div>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useRef, lazy, Suspense, useEffect, useCallback } from "react";
+import { useState, useRef, lazy, Suspense, useEffect, useCallback, useMemo } from "react";
 import { ThemeProvider, ToastProvider, useToast, useTheme } from "@context";
 import {
   useNotes,
@@ -26,6 +26,7 @@ import {
   CommandPalette,
   TemplatePicker,
   TrashView,
+  AiAssistantWidget,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
@@ -375,6 +376,22 @@ function AppContent() {
   const handleDoodleClear = useCallback(() => {
     showToast("涂鸦已清除", "success");
   }, [showToast]);
+
+  const aiConfig = useMemo(
+    () => ({
+      baseUrl: settings.aiApiBaseUrl,
+      apiKey: settings.aiApiKey,
+      model: settings.aiModel,
+    }),
+    [settings.aiApiBaseUrl, settings.aiApiKey, settings.aiModel]
+  );
+
+  const handleAiPosChange = useCallback(
+    (pos: { x: number; y: number }) => {
+      updateSettings({ aiWidgetPos: pos });
+    },
+    [updateSettings]
+  );
 
   const handlePaletteSelectNote = useCallback(
     (id: string) => {
@@ -781,6 +798,15 @@ function AppContent() {
         </div>
 
         <UsageTimeWidget hidden={isMobile} />
+        <AiAssistantWidget
+          hidden={!settings.aiAssistant}
+          noteTitle={currentNote ? currentNote.title || "Untitled" : null}
+          noteContent={currentNote?.content ?? null}
+          config={aiConfig}
+          pos={settings.aiWidgetPos}
+          onPosChange={handleAiPosChange}
+          onOpenSettings={handleToggleSettings}
+        />
 
         {eyeCare.isActive && (
           <div className="eyecare-indicator" title={eyeCare.phaseLabel}>

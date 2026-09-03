@@ -1,12 +1,13 @@
-import type { Note, Folder, Theme, StorageData, NoteTemplate } from "@types";
+import type { Note, Folder, Theme, StorageData, NoteTemplate, AiChat } from "@types";
 
 const DB_NAME = "markdown-notes-db";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NOTES = "notes";
 const STORE_FOLDERS = "folders";
 const STORE_SETTINGS = "settings";
 const STORE_FILES = "files";
 const STORE_TEMPLATES = "templates";
+const STORE_AI_CHATS = "ai_chats";
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -40,6 +41,11 @@ function openDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains(STORE_TEMPLATES)) {
         db.createObjectStore(STORE_TEMPLATES, { keyPath: "id" });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_AI_CHATS)) {
+        const chatStore = db.createObjectStore(STORE_AI_CHATS, { keyPath: "id" });
+        chatStore.createIndex("updatedAt", "updatedAt", { unique: false });
       }
     };
 
@@ -238,4 +244,17 @@ export async function idbSaveTemplate(template: NoteTemplate): Promise<void> {
 
 export async function idbDeleteTemplate(id: string): Promise<void> {
   await tx<undefined>(STORE_TEMPLATES, "readwrite", s => s.delete(id));
+}
+
+export async function idbGetAllAiChats(): Promise<AiChat[]> {
+  const chats = await tx<AiChat[]>(STORE_AI_CHATS, "readonly", s => s.getAll());
+  return (chats || []).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function idbSaveAiChat(chat: AiChat): Promise<void> {
+  await tx(STORE_AI_CHATS, "readwrite", s => s.put(chat));
+}
+
+export async function idbDeleteAiChat(id: string): Promise<void> {
+  await tx<undefined>(STORE_AI_CHATS, "readwrite", s => s.delete(id));
 }
