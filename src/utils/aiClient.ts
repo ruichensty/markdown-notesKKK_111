@@ -68,7 +68,7 @@ export interface StreamAiOptions {
   onDelta: (text: string) => void;
 }
 
-function classifyError(error: unknown): AiClientError {
+export function classifyError(error: unknown): AiClientError {
   if (error instanceof AiClientError) return error;
   if (error instanceof DOMException && error.name === "AbortError") {
     return new AiClientError("abort", "已停止生成");

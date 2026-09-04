@@ -386,6 +386,40 @@ function AppContent() {
     [settings.aiApiBaseUrl, settings.aiApiKey, settings.aiModel]
   );
 
+  const aiTts = useMemo(
+    () => ({
+      engine: settings.ttsEngine,
+      auto: settings.aiTtsAuto,
+      browser: { voiceName: settings.aiTtsVoiceName, rate: settings.aiTtsRate },
+      api: {
+        baseUrl: settings.ttsApiBaseUrl,
+        apiKey: settings.ttsApiKey,
+        model: settings.ttsApiModel,
+        voice: settings.ttsApiVoice,
+        speed: settings.ttsApiSpeed,
+      },
+    }),
+    [
+      settings.ttsEngine,
+      settings.aiTtsAuto,
+      settings.aiTtsVoiceName,
+      settings.aiTtsRate,
+      settings.ttsApiBaseUrl,
+      settings.ttsApiKey,
+      settings.ttsApiModel,
+      settings.ttsApiVoice,
+      settings.ttsApiSpeed,
+    ]
+  );
+
+  const handleToggleTtsAuto = useCallback(() => {
+    updateSettings({ aiTtsAuto: !settings.aiTtsAuto });
+  }, [updateSettings, settings.aiTtsAuto]);
+
+  const handleToggleTtsEngine = useCallback(() => {
+    updateSettings({ ttsEngine: settings.ttsEngine === "browser" ? "api" : "browser" });
+  }, [updateSettings, settings.ttsEngine]);
+
   const handleAiPosChange = useCallback(
     (pos: { x: number; y: number }) => {
       updateSettings({ aiWidgetPos: pos });
@@ -803,6 +837,9 @@ function AppContent() {
           noteTitle={currentNote ? currentNote.title || "Untitled" : null}
           noteContent={currentNote?.content ?? null}
           config={aiConfig}
+          tts={aiTts}
+          onToggleTtsAuto={handleToggleTtsAuto}
+          onToggleTtsEngine={handleToggleTtsEngine}
           pos={settings.aiWidgetPos}
           onPosChange={handleAiPosChange}
           onOpenSettings={handleToggleSettings}

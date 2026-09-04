@@ -1,13 +1,24 @@
-import { memo, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiChat } from "@types";
+import { useSpeech } from "@hooks/useSpeech";
+
+export interface TtsPanelConfig {
+  engine: "browser" | "api";
+  auto: boolean;
+  browser: { voiceName: string; rate: number };
+  api: { baseUrl: string; apiKey: string; model: string; voice: string; speed: number };
+}
 
 interface AiChatPanelProps {
   anchor: { x: number; y: number };
   noteTitle: string | null;
   noteContent: string | null;
   keyMissing: boolean;
+  tts: TtsPanelConfig;
+  onToggleTtsAuto: () => void;
+  onToggleTtsEngine: () => void;
   chats: AiChat[];
   activeChat: AiChat | null;
   activeChatId: string | null;
@@ -51,6 +62,9 @@ export function AiChatPanel(props: AiChatPanelProps) {
     noteTitle,
     noteContent,
     keyMissing,
+    tts,
+    onToggleTtsAuto,
+    onToggleTtsEngine,
     chats,
     activeChat,
     activeChatId,
@@ -68,14 +82,51 @@ export function AiChatPanel(props: AiChatPanelProps) {
   const [input, setInput] = useState("");
   const [useNoteContext, setUseNoteContext] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeech();
+  const { supported: ttsSupported, speakMessage, stop: stopSpeech, speechError } = speech;
+  const autoReadKeysRef = useRef<Set<string>>(new Set());
   const style = panelStyle(anchor);
+
+  const messages = useMemo(() => activeChat?.messages ?? [], [activeChat]);
+  const ttsAvailable = ttsSupported || tts.engine === "api";
+  const apiReady = tts.api.apiKey.trim() !== "" && tts.api.baseUrl.trim() !== "";
+
+  useEffect(() => {
+    return () => stopSpeech();
+  }, [stopSpeech]);
+
+  useEffect(() => {
+    if (!tts.auto || streaming || !ttsAvailable || keyMissing) return;
+    if (tts.engine === "api" && !apiReady) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || !last.content) return;
+    const key = `${activeChatId}:${messages.length - 1}`;
+    if (autoReadKeysRef.current.has(key)) return;
+    autoReadKeysRef.current.add(key);
+    speakMessage(key, last.content, {
+      engine: tts.engine,
+      browser: tts.browser,
+      api: tts.api,
+    });
+  }, [
+    messages,
+    streaming,
+    tts.auto,
+    tts.engine,
+    tts.browser,
+    tts.api,
+    ttsAvailable,
+    apiReady,
+    activeChatId,
+    keyMissing,
+    speakMessage,
+  ]);
 
   useLayoutEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
   }, [activeChat?.messages, streaming]);
 
-  const messages = activeChat?.messages ?? [];
   const lastAssistantStreaming =
     streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant";
 
@@ -137,7 +188,15 @@ export function AiChatPanel(props: AiChatPanelProps) {
               </svg>
             </button>
           )}
-          <button type="button" className="ai-chat-icon-btn" onClick={onClose} title="关闭 (Esc)">
+          <button
+            type="button"
+            className="ai-chat-icon-btn"
+            onClick={() => {
+              stopSpeech();
+              onClose();
+            }}
+            title="关闭 (Esc)"
+          >
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
             </svg>
@@ -170,7 +229,49 @@ export function AiChatPanel(props: AiChatPanelProps) {
           ) : (
             <div key={i} className="ai-msg ai-msg--assistant">
               {m.content ? (
-                <MarkdownMessage content={m.content} />
+                <>
+                  <MarkdownMessage content={m.content} />
+                  {ttsAvailable && (ttsSupported || apiReady) && (
+                    <button
+                      type="button"
+                      className={`ai-msg-speak ${
+                        speech.speakingKey === `${activeChatId}:${i}` ? "ai-msg-speak--active" : ""
+                      }`}
+                      onClick={() =>
+                        speakMessage(`${activeChatId}:${i}`, m.content, {
+                          engine: tts.engine,
+                          browser: tts.browser,
+                          api: tts.api,
+                        })
+                      }
+                      title={
+                        speech.speakingKey === `${activeChatId}:${i}`
+                          ? "停止朗读"
+                          : `朗读此消息（${tts.engine === "api" ? "云端语音" : "浏览器语音"}）`
+                      }
+                    >
+                      {speech.speakingKey === `${activeChatId}:${i}` ? (
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                          <rect x="4" y="4" width="8" height="8" rx="1.5" />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                        >
+                          <path
+                            d="M3 6.5v3h2.2L9 12.5v-9L5.2 6.5H3z"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M11 6q1.4 2 0 4M12.8 4.5q2.2 3.5 0 7" strokeLinecap="round" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </>
               ) : lastAssistantStreaming && i === messages.length - 1 ? (
                 <div className="ai-msg-bubble ai-msg-typing">
                   <span />
@@ -189,6 +290,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
       </div>
 
       {error && <div className="ai-chat-error">{error}</div>}
+      {speechError && <div className="ai-chat-error">{speechError}</div>}
 
       <div className="ai-chat-input-area">
         <div className="ai-chat-toolbar">
@@ -205,6 +307,38 @@ export function AiChatPanel(props: AiChatPanelProps) {
           >
             引用当前笔记{noteTitle ? `「${noteTitle.slice(0, 8)}」` : ""}
           </button>
+          {ttsAvailable && (
+            <button
+              type="button"
+              className={`ai-chat-chip ${tts.engine === "api" ? "ai-chat-chip--active" : ""}`}
+              onClick={() => {
+                if (tts.engine === "browser" && !apiReady) {
+                  stopSpeech();
+                  onOpenSettings();
+                  return;
+                }
+                stopSpeech();
+                onToggleTtsEngine();
+              }}
+              title={
+                tts.engine === "browser"
+                  ? `当前：浏览器语音，点击切换到云端语音${apiReady ? "" : "（未配置，将打开设置）"}`
+                  : "当前：云端语音，点击切回浏览器语音"
+              }
+            >
+              {tts.engine === "browser" ? "🔊 浏览器语音" : "☁️ 云端语音"}
+            </button>
+          )}
+          {ttsAvailable && (
+            <button
+              type="button"
+              className={`ai-chat-chip ${tts.auto ? "ai-chat-chip--active" : ""}`}
+              onClick={onToggleTtsAuto}
+              title="AI 回复完成后自动朗读（引擎、音色与语速在设置中调整）"
+            >
+              自动朗读
+            </button>
+          )}
           <span className="ai-chat-hint">Enter 发送 · Shift+Enter 换行</span>
         </div>
         <div className="ai-chat-input-row">

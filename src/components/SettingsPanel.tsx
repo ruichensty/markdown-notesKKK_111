@@ -2,6 +2,8 @@ import { useState, useEffect, memo } from "react";
 import type { Settings } from "@hooks/useSettings";
 import type { AiProviderId } from "@types";
 import { AI_PROVIDER_PRESETS, getPreset } from "@utils/aiClient";
+import { TTS_API_PRESETS, getTtsPreset } from "@utils/ttsApi";
+import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
@@ -32,7 +34,25 @@ function SettingsPanelBase({
 }: SettingsPanelProps) {
   const [visible, setVisible] = useState(false);
   const [rendered, setRendered] = useState(false);
+  const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
+
+  useEffect(() => {
+    if (!isSpeechSupported()) return;
+    let cancelled = false;
+    getVoicesAsync()
+      .then(list => {
+        if (!cancelled && list.length > 0) {
+          const zh = list.filter(v => /^zh([-_]|$)/i.test(v.lang) || /普通话|中文/i.test(v.name));
+          const rest = list.filter(v => !zh.includes(v));
+          setTtsVoices([...zh, ...rest]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleChange = (key: string, value: string | number | boolean) => {
     onUpdate({ [key]: value });
@@ -420,6 +440,229 @@ function SettingsPanelBase({
                   />
                 </button>
               </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1.5">语音引擎</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      id: "browser",
+                      name: "浏览器内置",
+                      desc: isSpeechSupported() ? "免费 · 离线" : "当前浏览器不支持",
+                    },
+                    { id: "api", name: "云端 API", desc: "更自然 · 按量计费" },
+                  ].map(opt => {
+                    const active = settings.ttsEngine === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleChange("ttsEngine", opt.id)}
+                        disabled={opt.id === "browser" && !isSpeechSupported()}
+                        className={`flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl text-[11px] font-medium transition-all border ${
+                          active
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70 disabled:opacity-40 disabled:cursor-not-allowed"
+                        }`}
+                      >
+                        <span className="text-base leading-none">
+                          {opt.id === "browser" ? "🔊" : "☁️"}
+                        </span>
+                        {opt.name}
+                        <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-foreground">自动朗读回复</span>
+                  <span className="text-[10px] text-muted-foreground ml-1.5">生成完自动播报</span>
+                </div>
+                <button
+                  onClick={() => handleChange("aiTtsAuto", !settings.aiTtsAuto)}
+                  className={`relative w-10 h-6 rounded-full transition-colors ${settings.aiTtsAuto ? "bg-primary" : "bg-muted"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${settings.aiTtsAuto ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+
+              {settings.ttsEngine === "browser" && isSpeechSupported() && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">播报音色</label>
+                    <select
+                      className="settings-ai-select"
+                      value={settings.aiTtsVoiceName}
+                      onChange={e => handleChange("aiTtsVoiceName", e.target.value)}
+                    >
+                      <option value="">自动（跟随系统）</option>
+                      {ttsVoices.map(v => (
+                        <option key={v.name} value={v.name}>
+                          {v.name}（{v.lang}）
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      播报语速{" "}
+                      <span className="text-foreground">{settings.aiTtsRate.toFixed(1)}x</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={settings.aiTtsRate}
+                      onChange={e => handleChange("aiTtsRate", Number(e.target.value))}
+                      className="w-full h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1.5">
+                      <span>慢</span>
+                      <span>快</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settings.ttsEngine === "api" && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      TTS 服务商
+                    </label>
+                    <select
+                      className="settings-ai-select"
+                      value={
+                        TTS_API_PRESETS.find(
+                          p =>
+                            p.id !== "custom" &&
+                            p.baseUrl === settings.ttsApiBaseUrl &&
+                            p.model === settings.ttsApiModel
+                        )?.id ?? "custom"
+                      }
+                      onChange={e => {
+                        const preset = getTtsPreset(e.target.value);
+                        if (preset.id === "custom") return;
+                        onUpdate({
+                          ttsApiBaseUrl: preset.baseUrl,
+                          ttsApiModel: preset.model,
+                          ttsApiVoice: preset.voiceHint,
+                        });
+                      }}
+                    >
+                      {TTS_API_PRESETS.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      API 地址（Base URL，OpenAI TTS 兼容）
+                    </label>
+                    <input
+                      type="text"
+                      className="settings-ai-input"
+                      value={settings.ttsApiBaseUrl}
+                      onChange={e => handleChange("ttsApiBaseUrl", e.target.value)}
+                      placeholder="https://…/v1"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      API Key（仅保存在本机）
+                    </label>
+                    <input
+                      type="password"
+                      className="settings-ai-input"
+                      value={settings.ttsApiKey}
+                      onChange={e => handleChange("ttsApiKey", e.target.value)}
+                      placeholder="sk-…"
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    {(() => {
+                      const preset = TTS_API_PRESETS.find(
+                        p =>
+                          p.id !== "custom" &&
+                          p.baseUrl === settings.ttsApiBaseUrl &&
+                          p.model === settings.ttsApiModel
+                      );
+                      return preset?.keyUrl ? (
+                        <a
+                          href={preset.keyUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-primary hover:underline mt-1 inline-block"
+                        >
+                          获取 {preset.label} API Key ↗
+                        </a>
+                      ) : null;
+                    })()}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      语音模型（TTS Model）
+                    </label>
+                    <input
+                      type="text"
+                      className="settings-ai-input"
+                      value={settings.ttsApiModel}
+                      onChange={e => handleChange("ttsApiModel", e.target.value)}
+                      placeholder="FunAudioLLM/CosyVoice2-0.5B"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      音色名称（Voice）
+                    </label>
+                    <input
+                      type="text"
+                      className="settings-ai-input"
+                      value={settings.ttsApiVoice}
+                      onChange={e => handleChange("ttsApiVoice", e.target.value)}
+                      placeholder="FunAudioLLM/CosyVoice2-0.5B:alex"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground mb-1">
+                      播报语速{" "}
+                      <span className="text-foreground">{settings.ttsApiSpeed.toFixed(2)}x</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0.25"
+                      max="4"
+                      step="0.05"
+                      value={settings.ttsApiSpeed}
+                      onChange={e => handleChange("ttsApiSpeed", Number(e.target.value))}
+                      className="w-full h-1.5 rounded-full appearance-none bg-muted accent-primary cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1.5">
+                      <span>慢</span>
+                      <span>快</span>
+                    </div>
+                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      云端语音按字符计费/消耗额度，开启「自动朗读」时请注意用量。
+                    </p>
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-[10px] text-muted-foreground mb-1">服务商</label>

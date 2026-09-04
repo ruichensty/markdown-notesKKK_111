@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAiChat } from "@hooks/useAiChat";
-import { AiChatPanel } from "./AiChatPanel";
+import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 
 const BOT_SIZE = 56;
 const EDGE_MARGIN = 8;
@@ -10,6 +10,9 @@ export interface AiAssistantWidgetProps {
   noteTitle: string | null;
   noteContent: string | null;
   config: { baseUrl: string; apiKey: string; model: string };
+  tts: TtsPanelConfig;
+  onToggleTtsAuto: () => void;
+  onToggleTtsEngine: () => void;
   pos: { x: number; y: number } | null;
   onPosChange: (pos: { x: number; y: number }) => void;
   onOpenSettings: () => void;
@@ -40,6 +43,9 @@ export function AiAssistantWidget({
   noteTitle,
   noteContent,
   config,
+  tts,
+  onToggleTtsAuto,
+  onToggleTtsEngine,
   pos,
   onPosChange,
   onOpenSettings,
@@ -192,6 +198,9 @@ export function AiAssistantWidget({
           noteTitle={noteTitle}
           noteContent={noteContent}
           keyMissing={keyMissing}
+          tts={tts}
+          onToggleTtsAuto={onToggleTtsAuto}
+          onToggleTtsEngine={onToggleTtsEngine}
           chats={chat.chats}
           activeChat={chat.activeChat}
           activeChatId={chat.activeChatId}

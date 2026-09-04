@@ -27,6 +27,15 @@ export interface Settings {
   aiApiBaseUrl: string;
   aiApiKey: string;
   aiModel: string;
+  aiTtsAuto: boolean;
+  aiTtsRate: number;
+  aiTtsVoiceName: string;
+  ttsEngine: "browser" | "api";
+  ttsApiBaseUrl: string;
+  ttsApiKey: string;
+  ttsApiModel: string;
+  ttsApiVoice: string;
+  ttsApiSpeed: number;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +63,15 @@ const DEFAULT_SETTINGS: Settings = {
   aiApiBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
   aiApiKey: "",
   aiModel: "glm-4-flash",
+  aiTtsAuto: false,
+  aiTtsRate: 1,
+  aiTtsVoiceName: "",
+  ttsEngine: "browser",
+  ttsApiBaseUrl: "https://api.siliconflow.cn/v1",
+  ttsApiKey: "",
+  ttsApiModel: "FunAudioLLM/CosyVoice2-0.5B",
+  ttsApiVoice: "",
+  ttsApiSpeed: 1,
 };
 
 const SETTINGS_KEY = "settings";
