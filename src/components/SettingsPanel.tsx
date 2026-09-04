@@ -1,9 +1,11 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import type { Settings } from "@hooks/useSettings";
 import type { AiProviderId } from "@types";
 import { AI_PROVIDER_PRESETS, getPreset } from "@utils/aiClient";
 import { TTS_API_PRESETS, getTtsPreset } from "@utils/ttsApi";
 import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
+import { createBackup, restoreBackup } from "@utils/backup";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
@@ -37,6 +39,13 @@ function SettingsPanelBase({
   const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [quickPromptLabel, setQuickPromptLabel] = useState("");
   const [quickPromptText, setQuickPromptText] = useState("");
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(
+    null
+  );
+  const [pendingBackupFile, setPendingBackupFile] = useState<File | null>(null);
+  const [showBackupConfirm, setShowBackupConfirm] = useState(false);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
   useEffect(() => {
@@ -62,7 +71,6 @@ function SettingsPanelBase({
 
   useEffect(() => {
     if (isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- render panel before the next frame to run slide-in transition
       setRendered(true);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -77,6 +85,55 @@ function SettingsPanelBase({
   const handleTransitionEnd = () => {
     if (!visible) {
       setRendered(false);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    setBackupMessage(null);
+    try {
+      const result = await createBackup();
+      const sizeLabel =
+        result.byteSize > 1024 * 1024
+          ? `${(result.byteSize / 1024 / 1024).toFixed(1)} MB`
+          : `${Math.max(1, Math.round(result.byteSize / 1024))} KB`;
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setBackupMessage({
+        kind: "ok",
+        text: `已导出 ${result.noteCount} 篇笔记、${result.fileCount} 个附件（${sizeLabel}）`,
+      });
+    } catch (error) {
+      setBackupMessage({
+        kind: "error",
+        text: `导出失败：${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleImportBackup = async () => {
+    if (!pendingBackupFile || backupBusy) return;
+    setBackupBusy(true);
+    try {
+      await restoreBackup(pendingBackupFile);
+      window.location.reload();
+    } catch (error) {
+      setBackupMessage({
+        kind: "error",
+        text: `导入失败：${error instanceof Error ? error.message : String(error)}`,
+      });
+      setShowBackupConfirm(false);
+      setPendingBackupFile(null);
+      setBackupBusy(false);
     }
   };
 
@@ -823,10 +880,74 @@ function SettingsPanelBase({
           </div>
 
           <div className="settings-section pt-2 border-t border-border/50">
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              数据备份与迁移
+            </label>
+            <div className="space-y-3">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                所有数据保存在当前浏览器中。切换浏览器或设备时，可导出备份文件再导入恢复（笔记、文件夹、附件、设置、模板、AI
+                聊天记录全量迁移）。备份包含 API Key，请妥善保管。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="settings-backup-btn"
+                  onClick={() => void handleExportBackup()}
+                  disabled={backupBusy}
+                >
+                  {backupBusy ? "处理中…" : "导出全部数据"}
+                </button>
+                <button
+                  type="button"
+                  className="settings-backup-btn"
+                  onClick={() => backupInputRef.current?.click()}
+                  disabled={backupBusy}
+                >
+                  导入数据
+                </button>
+                <input
+                  ref={backupInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    setPendingBackupFile(file);
+                    setShowBackupConfirm(true);
+                  }}
+                />
+              </div>
+              {backupMessage && (
+                <p
+                  className={`text-[10px] leading-relaxed ${
+                    backupMessage.kind === "ok" ? "text-primary" : "text-destructive"
+                  }`}
+                >
+                  {backupMessage.text}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="settings-section pt-2 border-t border-border/50">
             {onInsertTemplate && <TemplateManagement onInsertTemplate={onInsertTemplate} />}
           </div>
         </div>
       </div>
+      {showBackupConfirm && pendingBackupFile && (
+        <ConfirmDialog
+          message={`将清空当前浏览器中的全部数据（笔记、附件、设置、AI 聊天记录），并用备份文件「${pendingBackupFile.name}」覆盖。此操作不可撤销，确定继续吗？`}
+          confirmLabel="覆盖导入"
+          cancelLabel="取消"
+          onConfirm={() => void handleImportBackup()}
+          onCancel={() => {
+            setShowBackupConfirm(false);
+            setPendingBackupFile(null);
+          }}
+        />
+      )}
     </div>
   );
 }

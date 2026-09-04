@@ -258,3 +258,84 @@ export async function idbSaveAiChat(chat: AiChat): Promise<void> {
 export async function idbDeleteAiChat(id: string): Promise<void> {
   await tx<undefined>(STORE_AI_CHATS, "readwrite", s => s.delete(id));
 }
+
+export interface StoredFileRecord {
+  id: string;
+  noteId: string;
+  data: ArrayBuffer;
+  fileName: string;
+  fileType: string;
+  size: number;
+  createdAt: number;
+}
+
+export async function idbGetAllSettings(): Promise<{ key: string; value: unknown }[]> {
+  const rows = await tx<{ key: string; value: unknown }[]>(STORE_SETTINGS, "readonly", s =>
+    s.getAll()
+  );
+  return rows || [];
+}
+
+export async function idbGetAllFiles(): Promise<StoredFileRecord[]> {
+  const rows = await tx<StoredFileRecord[]>(STORE_FILES, "readonly", s => s.getAll());
+  return rows || [];
+}
+
+export interface ReplaceAllDataPayload {
+  notes: Note[];
+  folders: Folder[];
+  settings: { key: string; value: unknown }[];
+  templates: NoteTemplate[];
+  aiChats: AiChat[];
+  files: StoredFileRecord[];
+}
+
+export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise<void> {
+  const db = await openDB();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(
+      [STORE_NOTES, STORE_FOLDERS, STORE_SETTINGS, STORE_TEMPLATES, STORE_AI_CHATS, STORE_FILES],
+      "readwrite"
+    );
+
+    const report = (request: IDBRequest) => {
+      request.onerror = () => reject(request.error ?? transaction.error);
+    };
+
+    try {
+      const notesStore = transaction.objectStore(STORE_NOTES);
+      report(notesStore.clear());
+      for (const note of payload.notes) report(notesStore.put(note));
+
+      const foldersStore = transaction.objectStore(STORE_FOLDERS);
+      report(foldersStore.clear());
+      for (const folder of payload.folders) report(foldersStore.put(folder));
+
+      const settingsStore = transaction.objectStore(STORE_SETTINGS);
+      report(settingsStore.clear());
+      for (const entry of payload.settings) report(settingsStore.put(entry));
+
+      const templatesStore = transaction.objectStore(STORE_TEMPLATES);
+      report(templatesStore.clear());
+      for (const template of payload.templates) report(templatesStore.put(template));
+
+      const chatsStore = transaction.objectStore(STORE_AI_CHATS);
+      report(chatsStore.clear());
+      for (const chat of payload.aiChats) report(chatsStore.put(chat));
+
+      const filesStore = transaction.objectStore(STORE_FILES);
+      report(filesStore.clear());
+      for (const file of payload.files) report(filesStore.put(file));
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+
+  invalidateAllDataCache();
+}
