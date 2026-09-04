@@ -1,8 +1,50 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { useSessionTime } from "@hooks";
 
 interface UsageTimeWidgetProps {
   hidden?: boolean;
+}
+
+function formatUsage(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h} 小时 ${m % 60} 分钟` : `${m} 分钟`;
+}
+
+function WeekChart({
+  weekHistory,
+}: {
+  weekHistory: ReturnType<typeof useSessionTime>["weekHistory"];
+}) {
+  const maxSeconds = useMemo(() => Math.max(60, ...weekHistory.map(d => d.seconds)), [weekHistory]);
+
+  return (
+    <div className="usage-time-chart">
+      <div className="usage-time-chart-title">近 7 天</div>
+      <div className="usage-time-chart-bars">
+        {weekHistory.map(day => {
+          const pct =
+            day.seconds > 0 ? Math.max(6, Math.round((day.seconds / maxSeconds) * 100)) : 2;
+          return (
+            <div
+              key={day.date}
+              className={`usage-time-bar-track ${day.isToday ? "usage-time-bar-track--today" : ""}`}
+              title={`${day.isToday ? "今天" : `周${day.label}`} · ${formatUsage(day.seconds)}`}
+            >
+              <div className="usage-time-bar" style={{ height: `${pct}%` }} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="usage-time-chart-labels">
+        {weekHistory.map(day => (
+          <span key={day.date} className={day.isToday ? "usage-time-label--today" : ""}>
+            {day.isToday ? "今" : day.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function TimeRing({ progress, isRunning }: { progress: number; isRunning: boolean }) {
@@ -56,8 +98,16 @@ function TimeRing({ progress, isRunning }: { progress: number; isRunning: boolea
 }
 
 function UsageTimeWidgetInner({ hidden }: UsageTimeWidgetProps) {
-  const { hours, displayMinutes, progress, isRunning, setIsRunning, formattedTime, todaySeconds } =
-    useSessionTime();
+  const {
+    hours,
+    displayMinutes,
+    progress,
+    isRunning,
+    setIsRunning,
+    formattedTime,
+    todaySeconds,
+    weekHistory,
+  } = useSessionTime();
 
   const [expanded, setExpanded] = useState(false);
   const [hovering, setHovering] = useState(false);
@@ -108,6 +158,7 @@ function UsageTimeWidgetInner({ hidden }: UsageTimeWidgetProps) {
           >
             {isRunning ? "暂停计时" : "继续计时"}
           </button>
+          <WeekChart weekHistory={weekHistory} />
         </div>
       )}
     </div>

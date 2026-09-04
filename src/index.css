@@ -2166,8 +2166,67 @@
   background: hsl(var(--popover) / 0.95);
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 24px hsl(var(--foreground) / 0.08);
-  min-width: 160px;
+  min-width: 196px;
   animation: usage-time-fade-in 0.2s ease;
+}
+
+.usage-time-chart {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid hsl(var(--border) / 0.6);
+}
+
+.usage-time-chart-title {
+  font-size: 9px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 7px;
+  letter-spacing: 0.04em;
+}
+
+.usage-time-chart-bars {
+  display: flex;
+  gap: 5px;
+  align-items: stretch;
+  height: 56px;
+}
+
+.usage-time-bar-track {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 5px;
+  background: hsl(var(--muted) / 0.35);
+  overflow: hidden;
+}
+
+.usage-time-bar {
+  width: 100%;
+  background: hsl(var(--muted-foreground) / 0.45);
+  border-radius: 5px 5px 0 0;
+  transition: height 0.6s var(--ease-out, ease);
+}
+
+.usage-time-bar-track--today .usage-time-bar {
+  background: hsl(var(--primary));
+}
+
+.usage-time-chart-labels {
+  display: flex;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.usage-time-chart-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 9px;
+  color: hsl(var(--muted-foreground) / 0.85);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-time-chart-labels .usage-time-label--today {
+  color: hsl(var(--primary));
+  font-weight: 600;
 }
 
 .usage-time-tooltip-row {
