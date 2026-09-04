@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAiChat } from "@hooks/useAiChat";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
+import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
 const EDGE_MARGIN = 8;
@@ -11,6 +12,7 @@ export interface AiAssistantWidgetProps {
   noteContent: string | null;
   config: { baseUrl: string; apiKey: string; model: string };
   tts: TtsPanelConfig;
+  quickPrompts: AiQuickPrompt[];
   onToggleTtsAuto: () => void;
   onToggleTtsEngine: () => void;
   pos: { x: number; y: number } | null;
@@ -44,6 +46,7 @@ export function AiAssistantWidget({
   noteContent,
   config,
   tts,
+  quickPrompts,
   onToggleTtsAuto,
   onToggleTtsEngine,
   pos,
@@ -199,6 +202,7 @@ export function AiAssistantWidget({
           noteContent={noteContent}
           keyMissing={keyMissing}
           tts={tts}
+          quickPrompts={quickPrompts}
           onToggleTtsAuto={onToggleTtsAuto}
           onToggleTtsEngine={onToggleTtsEngine}
           chats={chat.chats}

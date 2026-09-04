@@ -35,6 +35,8 @@ function SettingsPanelBase({
   const [visible, setVisible] = useState(false);
   const [rendered, setRendered] = useState(false);
   const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [quickPromptLabel, setQuickPromptLabel] = useState("");
+  const [quickPromptText, setQuickPromptText] = useState("");
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
   useEffect(() => {
@@ -663,6 +665,71 @@ function SettingsPanelBase({
                   </div>
                 </>
               )}
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1.5">
+                  自定义快捷提问
+                  <span className="ml-1 opacity-70">（在 AI 面板中一键发送）</span>
+                </label>
+                <div className="space-y-1.5">
+                  {settings.aiQuickPrompts.map(p => (
+                    <div key={p.id} className="settings-quick-prompt-row">
+                      <span className="settings-quick-prompt-label">{p.label}</span>
+                      <span className="settings-quick-prompt-text">{p.text}</span>
+                      <button
+                        type="button"
+                        className="settings-quick-prompt-delete"
+                        title="删除该预设"
+                        onClick={() =>
+                          onUpdate({
+                            aiQuickPrompts: settings.aiQuickPrompts.filter(x => x.id !== p.id),
+                          })
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="settings-quick-prompt-form">
+                    <input
+                      type="text"
+                      className="settings-ai-input"
+                      value={quickPromptLabel}
+                      onChange={e => setQuickPromptLabel(e.target.value)}
+                      placeholder="短标签，如：🔍 查错别字"
+                      maxLength={20}
+                    />
+                    <input
+                      type="text"
+                      className="settings-ai-input"
+                      value={quickPromptText}
+                      onChange={e => setQuickPromptText(e.target.value)}
+                      placeholder="问题内容，如：请检查这篇笔记中的错别字并逐条列出。"
+                      maxLength={200}
+                    />
+                    <button
+                      type="button"
+                      className="settings-quick-prompt-add"
+                      disabled={!quickPromptLabel.trim() || !quickPromptText.trim()}
+                      onClick={() => {
+                        const label = quickPromptLabel.trim();
+                        const text = quickPromptText.trim();
+                        if (!label || !text) return;
+                        onUpdate({
+                          aiQuickPrompts: [
+                            ...settings.aiQuickPrompts,
+                            { id: `custom-${Date.now()}`, label, text },
+                          ],
+                        });
+                        setQuickPromptLabel("");
+                        setQuickPromptText("");
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               <div>
                 <label className="block text-[10px] text-muted-foreground mb-1">服务商</label>

@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiChat } from "@types";
 import { useSpeech } from "@hooks/useSpeech";
+import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface TtsPanelConfig {
   engine: "browser" | "api";
@@ -17,6 +18,7 @@ interface AiChatPanelProps {
   noteContent: string | null;
   keyMissing: boolean;
   tts: TtsPanelConfig;
+  quickPrompts: AiQuickPrompt[];
   onToggleTtsAuto: () => void;
   onToggleTtsEngine: () => void;
   chats: AiChat[];
@@ -63,6 +65,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
     noteContent,
     keyMissing,
     tts,
+    quickPrompts,
     onToggleTtsAuto,
     onToggleTtsEngine,
     chats,
@@ -81,6 +84,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
 
   const [input, setInput] = useState("");
   const [useNoteContext, setUseNoteContext] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const speech = useSpeech();
   const { supported: ttsSupported, speakMessage, stop: stopSpeech, speechError } = speech;
@@ -129,6 +133,27 @@ export function AiChatPanel(props: AiChatPanelProps) {
 
   const lastAssistantStreaming =
     streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant";
+
+  useEffect(() => {
+    if (!quickOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        setQuickOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [quickOpen]);
+
+  const sendPrompt = (prompt: AiQuickPrompt) => {
+    if (streaming || keyMissing) return;
+    setQuickOpen(false);
+    const withNote = useNoteContext || (prompt.needsNote === true && noteTitle !== null);
+    const noteContext =
+      withNote && noteTitle !== null ? { title: noteTitle, content: noteContent ?? "" } : null;
+    onSend(prompt.text, noteContext);
+  };
 
   const handleSend = () => {
     const text = input.trim();
@@ -215,11 +240,31 @@ export function AiChatPanel(props: AiChatPanelProps) {
 
       <div className="ai-chat-list" ref={listRef}>
         {messages.length === 0 && (
-          <div className="ai-chat-empty">
-            {keyMissing
-              ? "配置 API Key 后即可开始对话"
-              : "你好！我是 AI 助手，可以回答问题、总结润色笔记。开启「引用当前笔记」后还能针对正在编辑的内容工作。"}
-          </div>
+          <>
+            <div className="ai-chat-empty">
+              {keyMissing
+                ? "配置 API Key 后即可开始对话"
+                : "你好！我是 AI 助手，可以回答问题、总结润色笔记。开启「引用当前笔记」后还能针对正在编辑的内容工作。"}
+            </div>
+            {!keyMissing && quickPrompts.length > 0 && (
+              <div className="ai-quick-grid">
+                {quickPrompts.slice(0, 8).map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="ai-quick-chip"
+                    onClick={() => sendPrompt(p)}
+                    disabled={streaming}
+                    title={
+                      p.needsNote && noteTitle === null ? `${p.text}（当前未打开笔记）` : p.text
+                    }
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {messages.map((m, i) =>
           m.role === "user" ? (
@@ -307,6 +352,39 @@ export function AiChatPanel(props: AiChatPanelProps) {
           >
             引用当前笔记{noteTitle ? `「${noteTitle.slice(0, 8)}」` : ""}
           </button>
+          {messages.length > 0 && quickPrompts.length > 0 && !keyMissing && (
+            <div className="ai-quick-anchor">
+              <button
+                type="button"
+                className={`ai-chat-chip ${quickOpen ? "ai-chat-chip--active" : ""}`}
+                onClick={() => setQuickOpen(o => !o)}
+                disabled={streaming}
+                title="快捷提问：点击选择预设问题直接发送"
+              >
+                ⚡ 快捷
+              </button>
+              {quickOpen && (
+                <>
+                  <div className="ai-quick-backdrop" onClick={() => setQuickOpen(false)} />
+                  <div className="ai-quick-popover" role="menu" aria-label="快捷提问">
+                    {quickPrompts.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="ai-quick-item"
+                        onClick={() => sendPrompt(p)}
+                        disabled={streaming}
+                        role="menuitem"
+                      >
+                        <span className="ai-quick-item-label">{p.label}</span>
+                        <span className="ai-quick-item-text">{p.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {ttsAvailable && (
             <button
               type="button"

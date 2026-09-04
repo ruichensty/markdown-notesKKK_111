@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
 import type { AiProviderId } from "@types";
+import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface Settings {
   fontSize: "sm" | "md" | "lg" | number;
@@ -36,6 +37,7 @@ export interface Settings {
   ttsApiModel: string;
   ttsApiVoice: string;
   ttsApiSpeed: number;
+  aiQuickPrompts: AiQuickPrompt[];
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +74,7 @@ const DEFAULT_SETTINGS: Settings = {
   ttsApiModel: "FunAudioLLM/CosyVoice2-0.5B",
   ttsApiVoice: "",
   ttsApiSpeed: 1,
+  aiQuickPrompts: [],
 };
 
 const SETTINGS_KEY = "settings";

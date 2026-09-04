@@ -33,6 +33,7 @@ import type { EditorHandle } from "@components/Editor";
 import type { Note } from "@types";
 import { applyTemplateVariables } from "@utils/template";
 import { applyAccent } from "./constants/accents";
+import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
 const Preview = lazy(() => import("./components/Preview"));
 
@@ -419,6 +420,11 @@ function AppContent() {
   const handleToggleTtsEngine = useCallback(() => {
     updateSettings({ ttsEngine: settings.ttsEngine === "browser" ? "api" : "browser" });
   }, [updateSettings, settings.ttsEngine]);
+
+  const aiQuickPrompts = useMemo(
+    () => [...BUILT_IN_QUICK_PROMPTS, ...settings.aiQuickPrompts],
+    [settings.aiQuickPrompts]
+  );
 
   const handleAiPosChange = useCallback(
     (pos: { x: number; y: number }) => {
@@ -838,6 +844,7 @@ function AppContent() {
           noteContent={currentNote?.content ?? null}
           config={aiConfig}
           tts={aiTts}
+          quickPrompts={aiQuickPrompts}
           onToggleTtsAuto={handleToggleTtsAuto}
           onToggleTtsEngine={handleToggleTtsEngine}
           pos={settings.aiWidgetPos}
