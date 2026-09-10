@@ -19,7 +19,6 @@ import {
   ErrorBoundary,
   SettingsPanel,
   HomeView,
-  ParticleBackground,
   UsageTimeWidget,
   DoodleCanvas,
   HealthReminderPopup,
@@ -36,6 +35,7 @@ import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
 const Preview = lazy(() => import("./components/Preview"));
+const ParticleBackground = lazy(() => import("./components/ParticleBackground"));
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
@@ -690,10 +690,11 @@ function AppContent() {
   return (
     <>
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">
-        <ParticleBackground
-          hidden={settings.focusMode || settings.typewriterMode || !settings.particleEffects}
-          isMobile={isMobile}
-        />
+        {!settings.focusMode && !settings.typewriterMode && settings.particleEffects && (
+          <Suspense fallback={null}>
+            <ParticleBackground isMobile={isMobile} />
+          </Suspense>
+        )}
         {isMobile && sidebarOpen && viewMode !== "home" && (
           <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}

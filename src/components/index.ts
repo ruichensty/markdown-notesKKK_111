@@ -14,7 +14,6 @@ export { SidebarTabs } from "./SidebarTabs";
 export { SortableNoteList } from "./SortableNoteList";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { AttachmentImage } from "./AttachmentImage";
-export { default as ParticleBackground } from "./ParticleBackground";
 export { UsageTimeWidget } from "./UsageTimeWidget";
 export { DoodleCanvas } from "./DoodleCanvas";
 export { HealthReminderPopup } from "./HealthReminderPopup";
