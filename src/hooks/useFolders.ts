@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import type { Folder as FolderBase } from "@types";
 import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
 import { getAllDataCache } from "@utils/storage";
+import { buildFolderTree } from "@utils/folderTree";
 
 export interface Folder extends FolderBase {
   children?: Folder[];
@@ -79,25 +80,7 @@ export function useFolders() {
     [folders]
   );
 
-  const folderTree = useMemo(() => {
-    const byParent = new Map<string | null, Folder[]>();
-    for (const folder of folders) {
-      const key = folder.parentId ?? null;
-      const list = byParent.get(key) ?? [];
-      list.push(folder);
-      byParent.set(key, list);
-    }
-
-    const buildTree = (parentId: string | null = null): Folder[] => {
-      const children = byParent.get(parentId) ?? [];
-      return children.map(folder => ({
-        ...folder,
-        children: buildTree(folder.id),
-      }));
-    };
-
-    return buildTree();
-  }, [folders]);
+  const folderTree = useMemo<Folder[]>(() => buildFolderTree(folders), [folders]);
 
   return {
     folders,

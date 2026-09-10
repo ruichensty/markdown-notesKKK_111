@@ -69,6 +69,24 @@ describe("sortNotes", () => {
     expect(notes.map(n => n.id)).toEqual(["a", "b"]);
     expect(sorted).not.toBe(notes);
   });
+
+  it("空数组返回空数组", () => {
+    expect(sortNotes([])).toEqual([]);
+  });
+
+  it("单个元素原样返回", () => {
+    const notes = [{ id: "a", updatedAt: 100 }];
+    expect(sortNotes(notes)).toEqual(notes);
+  });
+
+  it("混合 order 缺失与存在的笔记", () => {
+    const notes = [
+      { id: "a", order: null, updatedAt: 300 },
+      { id: "b", order: 2, updatedAt: 100 },
+      { id: "c", order: 1, updatedAt: 200 },
+    ];
+    expect(sortNotes(notes).map(n => n.id)).toEqual(["a", "c", "b"]);
+  });
 });
 
 describe("generateId", () => {
