@@ -47,3 +47,6 @@ coverage
 dev.err
 dev.out
 nul
+
+# TypeScript build info
+tsconfig.tsbuildinfo
