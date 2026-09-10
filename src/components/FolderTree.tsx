@@ -2,8 +2,7 @@ import { useEffect, useState, useCallback, useRef, memo, useMemo } from "react";
 import { NoteItem } from "./NoteItem";
 import type { Folder, Note } from "@types";
 import { sortNotes } from "@utils/export";
-import { useContextMenu } from "./ContextMenu";
-import type { ContextMenuItem } from "./ContextMenu";
+import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 import {
   DndContext,
   DragOverlay,
@@ -153,7 +152,6 @@ function FolderNode({
 }: FolderNodeProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(folder.name);
-  const [isDragOver, setIsDragOver] = useState(false);
   const { show } = useContextMenu();
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `folder-drop-${folder.id}` });
   const {
@@ -173,10 +171,6 @@ function FolderNode({
     },
     [setDropRef, setDragRef, registerFocusable, folder.id]
   );
-
-  useEffect(() => {
-    setIsDragOver(isOver);
-  }, [isOver]);
 
   useEffect(() => {
     if (expanded && activeNoteId && hasActiveDescendant) {
@@ -324,7 +318,7 @@ function FolderNode({
     <div className="sidebar-folder">
       <div
         ref={combinedRef}
-        className={`sidebar-folder-header group ${isDragOver ? "sidebar-folder-header--drop-target" : ""} ${isFocused ? "sidebar-folder-header--focused" : ""}`}
+        className={`sidebar-folder-header group ${isOver ? "sidebar-folder-header--drop-target" : ""} ${isFocused ? "sidebar-folder-header--focused" : ""}`}
         style={{ paddingLeft: `${level * 16 + 6}px` }}
         data-focusable-id={`folder:${folder.id}`}
         onClick={() => onToggleExpand(folder.id)}

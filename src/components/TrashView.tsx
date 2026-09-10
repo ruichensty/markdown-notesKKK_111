@@ -29,16 +29,23 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
   const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setRendered(true);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true));
-      });
     } else {
       setVisible(false);
       setConfirmEmpty(false);
       setPurgeTarget(null);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
     }
   }, [open]);
 

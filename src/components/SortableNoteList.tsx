@@ -4,7 +4,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { NoteItem } from "./NoteItem";
 import type { Note } from "@types";
-import type { ContextMenuItem } from "./ContextMenu";
+import type { ContextMenuItem } from "@context/ContextMenuContext";
 
 interface SortableNoteListProps {
   notes: Note[];

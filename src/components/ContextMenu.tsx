@@ -1,24 +1,5 @@
-import {
-  createContext,
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  memo,
-  useContext,
-} from "react";
-
-export interface ContextMenuItem {
-  label: string;
-  icon?: React.ReactNode;
-  shortcut?: string;
-  danger?: boolean;
-  disabled?: boolean;
-  separator?: boolean;
-  onClick?: () => void;
-  children?: ContextMenuItem[];
-}
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, memo } from "react";
+import { ContextMenuContext, type ContextMenuItem } from "@context/ContextMenuContext";
 
 interface ContextMenuProps {
   x: number;
@@ -190,16 +171,6 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
-export interface ContextMenuContextValue {
-  show: (x: number, y: number, items: ContextMenuItem[]) => void;
-  hide: () => void;
-}
-
-export const ContextMenuContext = createContext<ContextMenuContextValue>({
-  show: () => {},
-  hide: () => {},
-});
-
 export function ContextMenuProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ContextMenuState | null>(null);
 
@@ -218,7 +189,5 @@ export function ContextMenuProvider({ children }: { children: React.ReactNode })
     </ContextMenuContext.Provider>
   );
 }
-
-export const useContextMenu = () => useContext(ContextMenuContext);
 
 export default memo(ContextMenu);

@@ -48,6 +48,16 @@ function SettingsPanelBase({
   const backupInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    if (isOpen) {
+      setRendered(true);
+    } else {
+      setVisible(false);
+    }
+  }
+
   useEffect(() => {
     if (!isSpeechSupported()) return;
     let cancelled = false;
@@ -71,14 +81,11 @@ function SettingsPanelBase({
 
   useEffect(() => {
     if (isOpen) {
-      setRendered(true);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setVisible(true);
         });
       });
-    } else {
-      setVisible(false);
     }
   }, [isOpen]);
 

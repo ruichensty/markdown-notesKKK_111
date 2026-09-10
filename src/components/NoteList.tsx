@@ -9,8 +9,7 @@ import { EmptyStateIllustration } from "./EmptyStateIllustration";
 import { useFolders, useOutline, useDebounce } from "@hooks";
 import { sortNotes } from "@utils/export";
 import type { Note } from "@types";
-import { useContextMenu } from "./ContextMenu";
-import type { ContextMenuItem } from "./ContextMenu";
+import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 
 interface NoteListProps {
   notes: Note[];

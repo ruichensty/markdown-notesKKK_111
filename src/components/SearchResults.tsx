@@ -1,6 +1,6 @@
 import { NoteItem } from "./NoteItem";
 import type { Note } from "@types";
-import type { ContextMenuItem } from "./ContextMenu";
+import type { ContextMenuItem } from "@context/ContextMenuContext";
 
 interface SearchResultsProps {
   notes: Note[];

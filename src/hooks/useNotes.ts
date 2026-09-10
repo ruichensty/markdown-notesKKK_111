@@ -129,6 +129,7 @@ export function useNotes(selectedFolderId: string | null = null) {
   }, [currentNoteId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState 发生在 await 之后，非同步
     reloadNotes()
       .then(() => {
         setLoaded(true);

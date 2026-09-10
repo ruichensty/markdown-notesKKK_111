@@ -1,7 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from "react";
 import type { Note } from "@types";
-import { useContextMenu } from "./ContextMenu";
-import type { ContextMenuItem } from "./ContextMenu";
+import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 
 const RECENCY_NOW = Date.now();
 

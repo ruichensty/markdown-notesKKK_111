@@ -8,16 +8,11 @@ export interface Folder extends FolderBase {
 }
 
 export function useFolders() {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [folders, setFolders] = useState<Folder[]>(() => getAllDataCache()?.folders ?? []);
+  const [loaded, setLoaded] = useState(() => !!getAllDataCache());
 
   useEffect(() => {
-    const cached = getAllDataCache();
-    if (cached) {
-      setFolders(cached.folders || []);
-      setLoaded(true);
-      return;
-    }
+    if (loaded) return;
     idbGetAllFolders()
       .then(data => {
         setFolders(data || []);
@@ -27,7 +22,7 @@ export function useFolders() {
         console.error("Failed to load folders:", error);
         setLoaded(true);
       });
-  }, []);
+  }, [loaded]);
 
   useEffect(() => {
     if (!loaded) return;

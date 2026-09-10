@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useMemo } from "react";
+import { memo, useState, useMemo } from "react";
 import { useSessionTime } from "@hooks";
 
 interface UsageTimeWidgetProps {
@@ -51,11 +51,6 @@ function TimeRing({ progress, isRunning }: { progress: number; isRunning: boolea
   const radius = 16;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - progress);
-  const [dashOffset, setDashOffset] = useState(offset);
-
-  useEffect(() => {
-    setDashOffset(offset);
-  }, [offset]);
 
   return (
     <svg className="usage-time-ring" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
@@ -76,7 +71,7 @@ function TimeRing({ progress, isRunning }: { progress: number; isRunning: boolea
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeDasharray={circumference}
-        strokeDashoffset={dashOffset}
+        strokeDashoffset={offset}
         className="usage-time-ring-progress"
         style={{ transform: "rotate(-90deg)", transformOrigin: "50% 50%" }}
       />

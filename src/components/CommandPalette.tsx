@@ -79,10 +79,17 @@ function CommandPaletteBase({
   const listRef = useRef<HTMLDivElement>(null);
   const { dialogRef, titleId } = useDialogA11y({ open, onClose });
 
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open && !wasOpen) {
+    setWasOpen(true);
+    setQuery("");
+    setActiveIdx(0);
+  } else if (!open && wasOpen) {
+    setWasOpen(false);
+  }
+
   useEffect(() => {
     if (open) {
-      setQuery("");
-      setActiveIdx(0);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -248,9 +255,11 @@ function CommandPaletteBase({
     return scored.map(s => s.item);
   }, [items, query]);
 
-  useEffect(() => {
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
     setActiveIdx(0);
-  }, [query]);
+  }
 
   useEffect(() => {
     const active = listRef.current?.children[activeIdx] as HTMLElement | undefined;
