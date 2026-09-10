@@ -51,7 +51,7 @@ const inlineMathExtension: TokenizerAndRendererExtension = {
 
 marked.use({ extensions: [blockMathExtension, inlineMathExtension] });
 
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -59,7 +59,7 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string): string {
   return (
     (name || "untitled")
       .replace(/[\\/:*?"<>|]/g, "_")
