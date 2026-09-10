@@ -2,20 +2,20 @@
 
 ## 技术栈
 
-| 类别          | 技术                               | 版本  |
-| ------------- | ---------------------------------- | ----- |
-| UI 框架       | React                              | 19.x  |
-| 开发语言      | TypeScript                         | 5.9.x |
-| 构建工具      | Vite                               | 4.5.x |
-| CSS 方案      | Tailwind CSS                       | 3.4.x |
-| Markdown 渲染 | react-markdown                     | 10.x  |
-| Markdown 扩展 | remark-gfm (GFM 语法)              | 4.x   |
-| 代码高亮      | react-syntax-highlighter (Prism)   | 16.x  |
-| 数学公式      | KaTeX (remark-math + rehype-katex) | -     |
-| 流程图        | Mermaid                            | 10.x  |
-| HTML 安全     | DOMPurify + rehype-sanitize        | -     |
-| 拖拽排序      | @dnd-kit/core + @dnd-kit/sortable  | -     |
-| 导出          | marked (HTML) + DOMPurify          | -     |
+| 类别          | 技术                               | 版本    |
+| ------------- | ---------------------------------- | ------- |
+| UI 框架       | React                              | 19.x    |
+| 开发语言      | TypeScript                         | 5.9.x   |
+| 构建工具      | Vite                               | 6.4.x   |
+| CSS 方案      | Tailwind CSS                       | 3.4.x   |
+| Markdown 渲染 | react-markdown                     | 10.x    |
+| Markdown 扩展 | remark-gfm (GFM 语法)              | 4.x     |
+| 代码高亮      | react-syntax-highlighter (Prism)   | 16.x    |
+| 数学公式      | KaTeX (remark-math + rehype-katex) | -       |
+| 流程图        | Mermaid                            | 11.17.x |
+| HTML 安全     | DOMPurify + rehype-sanitize        | -       |
+| 拖拽排序      | @dnd-kit/core + @dnd-kit/sortable  | -       |
+| 导出          | marked (HTML) + DOMPurify          | -       |
 
 ## 工程工具链
 
@@ -23,8 +23,9 @@
 | ---------- | ------------------------------------------------------------- |
 | 代码检查   | ESLint 9 + typescript-eslint + react-hooks/react-refresh 插件 |
 | 代码格式化 | Prettier                                                      |
+| 单元测试   | Vitest + Testing Library（jsdom 环境）                        |
 | CSS 后处理 | PostCSS + Autoprefixer                                        |
-| 包管理     | pnpm / npm                                                    |
+| 包管理     | pnpm                                                          |
 
 ## 项目架构
 
@@ -49,11 +50,24 @@ src/
 │   ├── ConfirmDialog  # 通用确认对话框
 │   ├── StatusBar      # 底部状态栏
 │   ├── ErrorBoundary  # 错误边界
+│   ├── TrashView      # 回收站（删除/恢复/清空）
+│   ├── CommandPalette # 命令面板（快速跳转/操作）
+│   ├── TemplatePicker # 模板选择器
+│   ├── TemplateManagement # 模板管理
+│   ├── AiAssistantWidget # AI 助手（流式对话/语音播报）
+│   ├── AiChatPanel   # AI 对话面板
+│   ├── ParticleBackground # 粒子背景（lazy 加载）
+│   ├── UsageTimeWidget # 使用时长统计
+│   ├── HealthReminderPopup # 健康提醒
+│   ├── DoodleCanvas  # 涂鸦画布
+│   ├── AwningCurtain # 卷帘切换动画
+│   ├── AttachmentImage # 图片附件渲染
 │   └── index.ts       # 统一导出
 ├── hooks/             # 自定义 Hooks
 │   ├── useNotes       # 笔记 CRUD + IndexedDB 增量同步
 │   ├── useFolders     # 文件夹管理 + 树构建
 │   ├── useSettings    # 设置读写（IndexedDB）
+│   ├── useTemplates   # 模板管理
 │   ├── useDebounce    # 防抖
 │   ├── useKeyboardShortcuts # 快捷键
 │   ├── useErrorHandler# 错误处理
@@ -61,14 +75,22 @@ src/
 │   ├── useOutline     # Markdown 标题大纲解析
 │   ├── useStorageEstimate # 存储空间估算
 │   ├── useWelcomeNote # 首次启动欢迎笔记
+│   ├── useEyeCare     # 护眼模式
+│   ├── useHealthReminder # 健康提醒
+│   ├── useSessionTime # 使用时长统计
 │   └── index.ts       # 统一导出
-├── context/           # React Context（2 个）
+├── context/           # React Context（3 个）
 │   ├── ThemeContext   # 主题切换（light/dark）
-│   └── ToastContext   # Toast 通知
+│   ├── ToastContext   # Toast 通知
+│   └── ContextMenuContext # 右键菜单
 ├── utils/             # 工具函数
 │   ├── indexedDBStorage # IndexedDB CRUD 层
 │   ├── storage        # 增量存储读写
-│   └── export         # 导出（MD/HTML/TXT/PDF）+ 日期格式化 + ID 生成
+│   ├── export         # 导出（MD/HTML/TXT/PDF）+ 日期格式化 + ID 生成
+│   ├── backup         # 全量备份与迁移
+│   ├── template       # 模板变量替换
+│   └── __tests__      # 单元测试
+├── constants/         # 常量（主题色/字体/AI 提示词）
 ├── types/             # TypeScript 类型定义
 ├── App.tsx            # 主应用组件
 ├── main.tsx           # 入口
@@ -81,7 +103,7 @@ src/
 - **状态管理**：无 Redux/Zustand，各 Hook 独立管理 state + Context 共享主题/通知
 - **路径别名**：`@components`、`@hooks`、`@types`、`@utils`、`@context`
 - **样式方案**：Tailwind CSS + CSS 变量（HSL 色值）实现主题切换
-- **懒加载**：Preview 组件使用 `React.lazy` 动态导入
+- **懒加载**：Preview、MermaidDiagram、ParticleBackground 组件使用 `React.lazy` 动态导入
 - **视图模式**：4 种视图（home / editor / split / preview）
 
 ## 数据流
@@ -167,15 +189,19 @@ hooks → IndexedDB (增量 diff: saveSingleNote / deleteSingleNote)
 | `pnpm format`       | Prettier 格式化代码            |
 | `pnpm format:check` | 检查代码格式                   |
 | `pnpm type-check`   | TypeScript 类型检查            |
+| `pnpm test`         | 运行单元测试（Vitest）         |
+| `pnpm test:watch`   | 监听模式运行测试               |
 
 ## 代码规模
 
-| 目录                                   | 行数            |
-| -------------------------------------- | --------------- |
-| components/                            | 约 1,625 行     |
-| hooks/                                 | 约 400 行       |
-| 根目录（App.tsx、main.tsx、index.css） | 约 636 行       |
-| utils/                                 | 约 247 行       |
-| context/                               | 约 159 行       |
-| types/                                 | 约 35 行        |
-| **合计（不含测试）**                   | **约 3,258 行** |
+| 目录                                   | 行数             |
+| -------------------------------------- | ---------------- |
+| components/                            | 约 9,250 行      |
+| hooks/                                 | 约 1,860 行      |
+| 根目录（App.tsx、main.tsx、index.css） | 约 5,865 行      |
+| utils/                                 | 约 1,584 行      |
+| context/                               | 约 222 行        |
+| constants/                             | 约 146 行        |
+| types/                                 | 约 89 行         |
+| 测试（test/ 与 **tests**/）            | 约 111 行        |
+| **合计（不含测试）**                   | **约 19,000 行** |

@@ -28,7 +28,7 @@ pnpm dev
 启动成功后会显示：
 
 ```
-VITE v4.5.3  ready in XXX ms
+VITE v6  ready in XXX ms
 
 ➜  Local:   http://localhost:3000/
 ➜  Network: use --host to expose
@@ -69,6 +69,8 @@ npm run dev
 | `pnpm format` / `npm run format`         | 使用 Prettier 格式化代码        |
 | `pnpm format:check`                      | 检查代码格式是否符合要求        |
 | `pnpm type-check` / `npm run type-check` | TypeScript 类型检查             |
+| `pnpm test`                              | 运行单元测试（Vitest）          |
+| `pnpm test:watch`                        | 监听模式运行测试                |
 
 ## 功能特性
 
@@ -86,6 +88,12 @@ npm run dev
 - ✅ 键盘快捷键支持
 - ✅ 笔记搜索（防抖）
 - ✅ 大纲视图
+- ✅ 回收站（删除可恢复）
+- ✅ 模板系统与命令面板
+- ✅ AI 助手（多服务商流式对话、语音播报）
+- ✅ 全量数据备份与迁移
+- ✅ 健康提醒、护眼模式
+- ✅ 使用时长统计
 - ✅ 移动端响应式适配
 
 ## 键盘快捷键
@@ -192,7 +200,7 @@ markdown-notes/
 ## 技术栈
 
 - **框架**: React 19 + TypeScript
-- **构建工具**: Vite 4
+- **构建工具**: Vite 6
 - **样式**: Tailwind CSS
 - **Markdown**: react-markdown + remark-gfm + remark-math + rehype-katex
 - **代码高亮**: react-syntax-highlighter
