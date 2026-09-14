@@ -561,7 +561,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       <div className="flex-1 overflow-hidden relative">
         {focusOverlayStyle && <div style={focusOverlayStyle} />}
-        <div className="editor-writing-surface">
+        <div className="editor-writing-surface h-full">
           <textarea
             ref={textareaRef}
             value={content}
