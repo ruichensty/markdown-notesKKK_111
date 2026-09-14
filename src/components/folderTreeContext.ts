@@ -26,6 +26,7 @@ export interface FolderTreeContextValue {
   focusedId: string | null;
   registerFocusable: (id: string, el: HTMLElement | null) => void;
   pendingRenameId?: string | null;
+  clearPendingRename: () => void;
 }
 
 export const FolderTreeContext = createContext<FolderTreeContextValue | null>(null);

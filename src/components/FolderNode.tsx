@@ -81,6 +81,7 @@ export const FolderNode = memo(function FolderNode({
     focusedId,
     registerFocusable,
     pendingRenameId,
+    clearPendingRename,
   } = useFolderTreeContext();
   const [isRenaming, setIsRenaming] = useState(folder.id === pendingRenameId);
   const [renameValue, setRenameValue] = useState(folder.name);
@@ -130,6 +131,7 @@ export const FolderNode = memo(function FolderNode({
       onRenameFolder(folder.id, renameValue.trim());
     } else {
       setRenameValue(folder.name);
+      clearPendingRename();
     }
     setIsRenaming(false);
   };
@@ -294,6 +296,7 @@ export const FolderNode = memo(function FolderNode({
               if (event.key === "Escape") {
                 setRenameValue(folder.name);
                 setIsRenaming(false);
+                clearPendingRename();
               }
             }}
             className="sidebar-folder-rename-input"

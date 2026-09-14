@@ -38,6 +38,7 @@ interface FolderTreeProps {
   expandedFolders: string[];
   onExpandedFoldersChange: (ids: string[]) => void;
   pendingRenameId?: string | null;
+  onClearPendingRename?: () => void;
 }
 
 function FolderTreeBase(props: FolderTreeProps) {
@@ -50,6 +51,9 @@ function FolderTreeBase(props: FolderTreeProps) {
     onReorderNotesInFolder,
     onNoteSelect,
     pendingRenameId,
+    onMoveNoteToFolder,
+    onMoveNoteToRoot,
+    onReorderFolder,
   } = props;
 
   const [dragState, setDragState] = useState<{
@@ -277,23 +281,23 @@ function FolderTreeBase(props: FolderTreeProps) {
         const note = activeData.note as Note;
         if (overId.startsWith("folder-drop-")) {
           const targetFolderId = overId.replace("folder-drop-", "");
-          props.onMoveNoteToFolder?.(note.id, targetFolderId);
+          onMoveNoteToFolder?.(note.id, targetFolderId);
         } else if (overId === "root-droppable") {
-          props.onMoveNoteToRoot?.(note.id);
+          onMoveNoteToRoot?.(note.id);
         }
       } else if (activeData.type === "folder") {
         const folder = activeData.folder as FolderNodeData;
         if (overId.startsWith("folder-drop-")) {
           const targetFolderId = overId.replace("folder-drop-", "");
           if (folder.id !== targetFolderId && !isFolderInSubtree(targetFolderId, folder)) {
-            props.onReorderFolder?.(folder.id, targetFolderId);
+            onReorderFolder?.(folder.id, targetFolderId);
           }
         } else if (overId === "root-droppable") {
-          props.onReorderFolder?.(folder.id, null);
+          onReorderFolder?.(folder.id, null);
         }
       }
     },
-    [props]
+    [onMoveNoteToFolder, onMoveNoteToRoot, onReorderFolder]
   );
 
   const contextValue = useMemo<FolderTreeContextValue>(
@@ -321,6 +325,7 @@ function FolderTreeBase(props: FolderTreeProps) {
       focusedId,
       registerFocusable,
       pendingRenameId,
+      clearPendingRename: props.onClearPendingRename ?? (() => {}),
     }),
     [
       notesByFolder,
@@ -333,7 +338,20 @@ function FolderTreeBase(props: FolderTreeProps) {
       focusedId,
       registerFocusable,
       pendingRenameId,
-      props,
+      props.onNoteDelete,
+      props.onNewNote,
+      props.onCreateFolder,
+      props.onDeleteFolder,
+      props.onRenameFolder,
+      props.onMoveNoteToFolder,
+      props.onMoveNoteToRoot,
+      props.onReorderFolder,
+      props.onCopyNote,
+      props.selectionMode,
+      props.selectedIds,
+      props.onToggleSelect,
+      props.allFolders,
+      props.onClearPendingRename,
     ]
   );
 

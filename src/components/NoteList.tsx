@@ -523,6 +523,7 @@ function NoteList({
               expandedFolders={expandedFolders}
               onExpandedFoldersChange={onExpandedFoldersChange ?? (() => {})}
               pendingRenameId={pendingRenameId}
+              onClearPendingRename={() => setPendingRenameId(null)}
             />
             {notes.length === 0 && <EmptyNotes />}
           </>
