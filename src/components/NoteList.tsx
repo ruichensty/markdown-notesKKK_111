@@ -6,9 +6,10 @@ import { SidebarTabs } from "./SidebarTabs";
 import type { SidebarTab } from "./SidebarTabs";
 import { FolderTree } from "./FolderTree";
 import { EmptyStateIllustration } from "./EmptyStateIllustration";
-import { useFolders, useOutline, useDebounce } from "@hooks";
+import { useOutline, useDebounce } from "@hooks";
+import { flattenFolderTree, type FolderNodeData } from "@utils/folderTree";
 import { sortNotes } from "@utils/export";
-import type { Note } from "@types";
+import type { Note, Folder } from "@types";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 
 interface NoteListProps {
@@ -39,6 +40,11 @@ interface NoteListProps {
   expandedFolders?: string[];
   onExpandedFoldersChange?: (ids: string[]) => void;
   onReorderNotesInFolder?: (folderId: string, activeId: string, overId: string) => void;
+  folderTree: FolderNodeData[];
+  folders: Folder[];
+  createFolder: (data: Omit<Folder, "id">) => string;
+  deleteFolder: (id: string) => void;
+  updateFolder: (id: string, data: Partial<Folder>) => void;
 }
 
 function EmptyNotes() {
@@ -49,19 +55,6 @@ function EmptyNotes() {
       <p className="text-[9px] text-muted-foreground/25 mt-0.5">点击上方按钮创建</p>
     </div>
   );
-}
-
-type FlatFolder = { id: string; name: string; children?: FlatFolder[] };
-function flattenFoldersForMenu(
-  tree: FlatFolder[],
-  depth = 0,
-  acc: { folder: FlatFolder; depth: number }[] = []
-): { folder: FlatFolder; depth: number }[] {
-  for (const f of tree) {
-    acc.push({ folder: f, depth });
-    if (f.children?.length) flattenFoldersForMenu(f.children, depth + 1, acc);
-  }
-  return acc;
 }
 
 function NoteList({
@@ -90,14 +83,19 @@ function NoteList({
   onExpandedFoldersChange,
   onReorderNotesInFolder,
   onBatchMoveToFolder,
+  folderTree,
+  folders,
+  createFolder,
+  deleteFolder,
+  updateFolder,
 }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("notes");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingRenameId, setPendingRenameId] = useState<string | null>(null);
 
   const { show: showContextMenu } = useContextMenu();
-  const { folderTree, folders, createFolder, deleteFolder, updateFolder } = useFolders();
   const headings = useOutline(currentNoteContent || "");
 
   const debouncedSearchQuery = useDebounce(searchQuery, 200);
@@ -137,7 +135,8 @@ function NoteList({
 
   const handleCreateFolder = useCallback(
     (parentId: string | null) => {
-      createFolder({ name: "New Folder", parentId, createdAt: Date.now() });
+      const id = createFolder({ name: "New Folder", parentId, createdAt: Date.now() });
+      setPendingRenameId(id);
     },
     [createFolder]
   );
@@ -145,6 +144,7 @@ function NoteList({
   const handleRenameFolder = useCallback(
     (id: string, name: string) => {
       updateFolder(id, { name });
+      setPendingRenameId(null);
     },
     [updateFolder]
   );
@@ -248,15 +248,13 @@ function NoteList({
   const handleBatchMoveRequest = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       if (selectedIds.size === 0 || !onBatchMoveToFolder) return;
-      const items: ContextMenuItem[] = flattenFoldersForMenu(folderTree).map(
-        ({ folder, depth }) => ({
-          label: depth === 0 ? folder.name : `${"\u3000".repeat(depth)}\u203A ${folder.name}`,
-          onClick: () => {
-            onBatchMoveToFolder(Array.from(selectedIds), folder.id);
-            handleExitSelection();
-          },
-        })
-      );
+      const items: ContextMenuItem[] = flattenFolderTree(folderTree).map(({ folder, depth }) => ({
+        label: depth === 0 ? folder.name : `${"\u3000".repeat(depth)}\u203A ${folder.name}`,
+        onClick: () => {
+          onBatchMoveToFolder(Array.from(selectedIds), folder.id);
+          handleExitSelection();
+        },
+      }));
       if (items.length === 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
       showContextMenu(rect.left, rect.bottom + 4, items);
@@ -524,6 +522,7 @@ function NoteList({
               allFolders={folderTree}
               expandedFolders={expandedFolders}
               onExpandedFoldersChange={onExpandedFoldersChange ?? (() => {})}
+              pendingRenameId={pendingRenameId}
             />
             {notes.length === 0 && <EmptyNotes />}
           </>
@@ -688,6 +687,11 @@ export default memo(NoteList, (prevProps, nextProps) => {
     prevProps.collapsed === nextProps.collapsed &&
     prevProps.selectedFolderId === nextProps.selectedFolderId &&
     prevProps.expandedFolders === nextProps.expandedFolders &&
+    prevProps.folderTree === nextProps.folderTree &&
+    prevProps.folders === nextProps.folders &&
+    prevProps.createFolder === nextProps.createFolder &&
+    prevProps.deleteFolder === nextProps.deleteFolder &&
+    prevProps.updateFolder === nextProps.updateFolder &&
     prevProps.isMobile === nextProps.isMobile
   );
 });

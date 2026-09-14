@@ -1,12 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import type { Folder as FolderBase } from "@types";
+import type { Folder } from "@types";
 import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
 import { getAllDataCache } from "@utils/storage";
-import { buildFolderTree } from "@utils/folderTree";
-
-export interface Folder extends FolderBase {
-  children?: Folder[];
-}
+import { buildFolderTree, type FolderNodeData } from "@utils/folderTree";
 
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>(() => getAllDataCache()?.folders ?? []);
@@ -35,12 +31,13 @@ export function useFolders() {
     return () => window.clearTimeout(timeoutId);
   }, [folders, loaded]);
 
-  const createFolder = useCallback((data: Omit<Folder, "id" | "children">) => {
+  const createFolder = useCallback((data: Omit<Folder, "id">): string => {
     const newFolder: Folder = {
       ...data,
       id: `folder-${Date.now()}`,
     };
     setFolders(prev => [...prev, newFolder]);
+    return newFolder.id;
   }, []);
 
   const updateFolder = useCallback((id: string, data: Partial<Folder>) => {
@@ -80,7 +77,7 @@ export function useFolders() {
     [folders]
   );
 
-  const folderTree = useMemo<Folder[]>(() => buildFolderTree(folders), [folders]);
+  const folderTree = useMemo<FolderNodeData[]>(() => buildFolderTree(folders), [folders]);
 
   return {
     folders,

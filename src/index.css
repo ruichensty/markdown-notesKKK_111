@@ -2979,7 +2979,7 @@
   cursor: pointer;
   border: 1px solid transparent;
   border-radius: 16px;
-  margin: 6px 0;
+  margin: 4px 0;
   min-height: 44px;
   background: hsl(var(--muted) / 0.28);
   transition:
@@ -3013,6 +3013,7 @@
 
 .sidebar-folder-header:hover .sidebar-folder-icon {
   color: hsl(var(--primary) / 0.75);
+  transform: scale(1.05);
 }
 
 .sidebar-folder-name {
@@ -3118,8 +3119,8 @@
   gap: 0.5rem;
   margin: 0.25rem 0.5rem 0.5rem 0;
   padding: 0.375rem 0.625rem;
-  border: 1px dashed hsl(var(--border) / 0.65);
-  border-radius: 14px;
+  border: 1px dashed hsl(var(--border) / 0.5);
+  border-radius: 10px;
   cursor: pointer;
   color: hsl(var(--muted-foreground) / 0.45);
   font-size: 10px;
@@ -3136,6 +3137,11 @@
 .sidebar-folder-empty-hint svg {
   width: 12px;
   height: 12px;
+  transition: transform 0.15s ease;
+}
+
+.sidebar-folder-empty-hint:hover svg {
+  transform: scale(1.15);
 }
 
 /* Folder expand/collapse animation */
@@ -3144,8 +3150,8 @@
   grid-template-rows: 0fr;
   opacity: 0;
   transition:
-    grid-template-rows 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.2s ease;
+    grid-template-rows 0.22s cubic-bezier(0.33, 1, 0.68, 1),
+    opacity 0.22s ease;
 }
 
 .sidebar-folder-children-wrapper--expanded {
@@ -3194,14 +3200,14 @@
 /* Indent guide lines */
 .sidebar-folder-children {
   position: relative;
-  margin-left: 16px;
-  padding-left: 10px;
+  margin-left: 0;
+  padding-left: 0;
 }
 
 .sidebar-folder-children::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: var(--indent, 20px);
   top: 0;
   bottom: 8px;
   width: 1px;
@@ -3506,14 +3512,14 @@
 /* Indent guide lines */
 .sidebar-folder-children {
   position: relative;
-  margin-left: 13px;
-  padding-left: 8px;
+  margin-left: 0;
+  padding-left: 0;
 }
 
 .sidebar-folder-children::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: var(--indent, 20px);
   top: 0;
   bottom: 8px;
   width: 1px;

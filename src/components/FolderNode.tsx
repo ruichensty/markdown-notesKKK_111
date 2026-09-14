@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef, memo, useMemo } from "react";
 import { NoteItem } from "./NoteItem";
-import type { Folder, Note } from "@types";
+import type { Note } from "@types";
 import { sortNotes } from "@utils/export";
+import { flattenFolderTree, collectSubtreeIds, type FolderNodeData } from "@utils/folderTree";
+import { useFolderTreeContext } from "./folderTreeContext";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 import {
   DndContext,
@@ -15,31 +17,8 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-export type FolderNodeData = Folder & { children?: FolderNodeData[] };
-
 const INDENT_INDICATOR = "\u203A";
-
-function flattenFolders(
-  tree: FolderNodeData[],
-  depth = 0,
-  acc: { folder: FolderNodeData; depth: number }[] = []
-): { folder: FolderNodeData; depth: number }[] {
-  for (const f of tree) {
-    acc.push({ folder: f, depth });
-    if (f.children?.length) flattenFolders(f.children, depth + 1, acc);
-  }
-  return acc;
-}
-
-function collectSubtreeIds(folder: FolderNodeData): Set<string> {
-  const ids = new Set<string>();
-  const walk = (f: FolderNodeData) => {
-    ids.add(f.id);
-    (f.children || []).forEach(walk);
-  };
-  walk(folder);
-  return ids;
-}
+const EMPTY_NOTES: Note[] = [];
 
 function indentedLabel(name: string, depth: number): string {
   return depth === 0 ? name : `${"\u3000".repeat(depth)}${INDENT_INDICATOR} ${name}`;
@@ -68,61 +47,42 @@ interface FolderNodeProps {
   folderNotes: Note[];
   hasActiveDescendant: boolean;
   expanded: boolean;
-  notesByFolder: Map<string, Note[]>;
-  activeAncestorSet: Set<string>;
-  expandedSet: Set<string>;
-  onToggleExpand: (id: string, force?: boolean) => void;
-  activeNoteId: string | null;
-  onNoteSelect: (id: string) => void;
-  onNoteDelete: (id: string) => void;
-  onNewNote: (folderIds?: string[]) => void;
-  onCreateFolder: (parentId: string | null) => void;
-  onDeleteFolder: (id: string) => void;
-  onRenameFolder: (id: string, name: string) => void;
-  onMoveNoteToFolder?: (noteId: string, folderId: string) => void;
-  onMoveNoteToRoot?: (noteId: string) => void;
-  onReorderFolder?: (folderId: string, newParentId: string | null, newIndex?: number) => void;
-  onCopyNote?: (noteId: string) => void;
-  onReorderNotesInFolder?: (folderId: string, activeId: string, overId: string) => void;
   level: number;
-  selectionMode?: boolean;
-  selectedIds?: Set<string>;
-  onToggleSelect?: (id: string) => void;
-  allFolders?: FolderNodeData[];
-  focusedId: string | null;
-  registerFocusable: (id: string, el: HTMLElement | null) => void;
 }
 
-export function FolderNode({
+export const FolderNode = memo(function FolderNode({
   folder,
   folderNotes,
   hasActiveDescendant,
   expanded,
-  notesByFolder,
-  activeAncestorSet,
-  expandedSet,
-  onToggleExpand,
-  activeNoteId,
-  onNoteSelect,
-  onNoteDelete,
-  onNewNote,
-  onCreateFolder,
-  onDeleteFolder,
-  onRenameFolder,
-  onMoveNoteToFolder,
-  onMoveNoteToRoot,
-  onReorderFolder,
-  onCopyNote,
-  onReorderNotesInFolder,
   level,
-  selectionMode,
-  selectedIds,
-  onToggleSelect,
-  allFolders,
-  focusedId,
-  registerFocusable,
 }: FolderNodeProps) {
-  const [isRenaming, setIsRenaming] = useState(false);
+  const {
+    notesByFolder,
+    activeAncestorSet,
+    expandedSet,
+    onToggleExpand,
+    activeNoteId,
+    onNoteSelect,
+    onNoteDelete,
+    onNewNote,
+    onCreateFolder,
+    onDeleteFolder,
+    onRenameFolder,
+    onMoveNoteToFolder,
+    onMoveNoteToRoot,
+    onReorderFolder,
+    onCopyNote,
+    onReorderNotesInFolder,
+    selectionMode,
+    selectedIds,
+    onToggleSelect,
+    allFolders,
+    focusedId,
+    registerFocusable,
+    pendingRenameId,
+  } = useFolderTreeContext();
+  const [isRenaming, setIsRenaming] = useState(folder.id === pendingRenameId);
   const [renameValue, setRenameValue] = useState(folder.name);
   const { show } = useContextMenu();
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `folder-drop-${folder.id}` });
@@ -176,7 +136,7 @@ export function FolderNode({
 
   const buildFolderMoveTargets = useCallback((): ContextMenuItem[] => {
     const excludeIds = collectSubtreeIds(folder);
-    return flattenFolders(allFolders || [])
+    return flattenFolderTree(allFolders || [])
       .filter(item => !excludeIds.has(item.folder.id))
       .map(item => ({
         label: indentedLabel(item.folder.name, item.depth),
@@ -187,7 +147,7 @@ export function FolderNode({
   const buildNoteMoveTargets = useCallback(
     (note: Note): ContextMenuItem[] => {
       const currentFolderIds = new Set(note.folderIds || []);
-      return flattenFolders(allFolders || [])
+      return flattenFolderTree(allFolders || [])
         .filter(item => !currentFolderIds.has(item.folder.id))
         .map(item => ({
           label: indentedLabel(item.folder.name, item.depth),
@@ -442,37 +402,18 @@ export function FolderNode({
           transform: expanded ? "translateY(0)" : "translateY(-4px)",
         }}
       >
-        <div className="sidebar-folder-children">
+        <div
+          className="sidebar-folder-children"
+          style={{ "--indent": `${level * 16 + 20}px` } as React.CSSProperties}
+        >
           {children.map(child => (
             <FolderNode
               key={child.id}
               folder={child}
-              folderNotes={notesByFolder.get(child.id) || []}
+              folderNotes={notesByFolder.get(child.id) ?? EMPTY_NOTES}
               hasActiveDescendant={activeAncestorSet.has(child.id)}
               expanded={expandedSet.has(child.id)}
-              notesByFolder={notesByFolder}
-              activeAncestorSet={activeAncestorSet}
-              expandedSet={expandedSet}
-              onToggleExpand={onToggleExpand}
-              activeNoteId={activeNoteId}
-              onNoteSelect={onNoteSelect}
-              onNoteDelete={onNoteDelete}
-              onNewNote={onNewNote}
-              onCreateFolder={onCreateFolder}
-              onDeleteFolder={onDeleteFolder}
-              onRenameFolder={onRenameFolder}
-              onMoveNoteToFolder={onMoveNoteToFolder}
-              onMoveNoteToRoot={onMoveNoteToRoot}
-              onReorderFolder={onReorderFolder}
-              onCopyNote={onCopyNote}
-              onReorderNotesInFolder={onReorderNotesInFolder}
               level={level + 1}
-              selectionMode={selectionMode}
-              selectedIds={selectedIds}
-              onToggleSelect={onToggleSelect}
-              allFolders={allFolders}
-              focusedId={focusedId}
-              registerFocusable={registerFocusable}
             />
           ))}
           <SortableFolderNotes
@@ -519,7 +460,7 @@ export function FolderNode({
       </div>
     </div>
   );
-}
+});
 
 interface SortableFolderNotesProps {
   folderId: string;

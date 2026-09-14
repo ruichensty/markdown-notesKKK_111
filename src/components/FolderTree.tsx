@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from "react";
 import type { Note } from "@types";
-import { FolderNode, type FolderNodeData } from "./FolderNode";
+import { FolderNode } from "./FolderNode";
+import { FolderTreeContext, type FolderTreeContextValue } from "./folderTreeContext";
+import { isFolderInSubtree, type FolderNodeData } from "@utils/folderTree";
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +14,7 @@ import {
 import type { DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core";
 
 const HOVER_EXPAND_DELAY = 500;
+const EMPTY_NOTES: Note[] = [];
 
 interface FolderTreeProps {
   folders: FolderNodeData[];
@@ -34,6 +37,7 @@ interface FolderTreeProps {
   allFolders?: FolderNodeData[];
   expandedFolders: string[];
   onExpandedFoldersChange: (ids: string[]) => void;
+  pendingRenameId?: string | null;
 }
 
 function FolderTreeBase(props: FolderTreeProps) {
@@ -45,6 +49,7 @@ function FolderTreeBase(props: FolderTreeProps) {
     onExpandedFoldersChange,
     onReorderNotesInFolder,
     onNoteSelect,
+    pendingRenameId,
   } = props;
 
   const [dragState, setDragState] = useState<{
@@ -291,6 +296,47 @@ function FolderTreeBase(props: FolderTreeProps) {
     [props]
   );
 
+  const contextValue = useMemo<FolderTreeContextValue>(
+    () => ({
+      notesByFolder,
+      activeAncestorSet,
+      expandedSet,
+      onToggleExpand: handleToggleExpand,
+      activeNoteId,
+      onNoteSelect,
+      onNoteDelete: props.onNoteDelete,
+      onNewNote: props.onNewNote,
+      onCreateFolder: props.onCreateFolder,
+      onDeleteFolder: props.onDeleteFolder,
+      onRenameFolder: props.onRenameFolder,
+      onMoveNoteToFolder: props.onMoveNoteToFolder,
+      onMoveNoteToRoot: props.onMoveNoteToRoot,
+      onReorderFolder: props.onReorderFolder,
+      onCopyNote: props.onCopyNote,
+      onReorderNotesInFolder,
+      selectionMode: props.selectionMode,
+      selectedIds: props.selectedIds,
+      onToggleSelect: props.onToggleSelect,
+      allFolders: props.allFolders,
+      focusedId,
+      registerFocusable,
+      pendingRenameId,
+    }),
+    [
+      notesByFolder,
+      activeAncestorSet,
+      expandedSet,
+      handleToggleExpand,
+      activeNoteId,
+      onNoteSelect,
+      onReorderNotesInFolder,
+      focusedId,
+      registerFocusable,
+      pendingRenameId,
+      props,
+    ]
+  );
+
   return (
     <div
       className="sidebar-folder-tree-root"
@@ -305,38 +351,18 @@ function FolderTreeBase(props: FolderTreeProps) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        {folders.map(folder => (
-          <FolderNode
-            key={folder.id}
-            folder={folder}
-            folderNotes={notesByFolder.get(folder.id) || []}
-            hasActiveDescendant={activeAncestorSet.has(folder.id)}
-            expanded={expandedSet.has(folder.id)}
-            notesByFolder={notesByFolder}
-            activeAncestorSet={activeAncestorSet}
-            expandedSet={expandedSet}
-            onToggleExpand={handleToggleExpand}
-            activeNoteId={activeNoteId}
-            onNoteSelect={onNoteSelect}
-            onNoteDelete={props.onNoteDelete}
-            onNewNote={props.onNewNote}
-            onCreateFolder={props.onCreateFolder}
-            onDeleteFolder={props.onDeleteFolder}
-            onRenameFolder={props.onRenameFolder}
-            onMoveNoteToFolder={props.onMoveNoteToFolder}
-            onMoveNoteToRoot={props.onMoveNoteToRoot}
-            onReorderFolder={props.onReorderFolder}
-            onCopyNote={props.onCopyNote}
-            onReorderNotesInFolder={onReorderNotesInFolder}
-            level={0}
-            selectionMode={props.selectionMode}
-            selectedIds={props.selectedIds}
-            onToggleSelect={props.onToggleSelect}
-            allFolders={props.allFolders}
-            focusedId={focusedId}
-            registerFocusable={registerFocusable}
-          />
-        ))}
+        <FolderTreeContext.Provider value={contextValue}>
+          {folders.map(folder => (
+            <FolderNode
+              key={folder.id}
+              folder={folder}
+              folderNotes={notesByFolder.get(folder.id) ?? EMPTY_NOTES}
+              hasActiveDescendant={activeAncestorSet.has(folder.id)}
+              expanded={expandedSet.has(folder.id)}
+              level={0}
+            />
+          ))}
+        </FolderTreeContext.Provider>
         {dragState && (
           <DragOverlay dropAnimation={null}>
             <div className="drag-overlay-item">
@@ -373,14 +399,3 @@ function FolderTreeBase(props: FolderTreeProps) {
 }
 
 export const FolderTree = memo(FolderTreeBase);
-
-function isFolderInSubtree(folderId: string, subtree: FolderNodeData): boolean {
-  const check = (f: FolderNodeData): boolean => {
-    for (const child of f.children || []) {
-      if (child.id === folderId) return true;
-      if (check(child)) return true;
-    }
-    return false;
-  };
-  return check(subtree);
-}

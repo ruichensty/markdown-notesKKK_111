@@ -136,7 +136,7 @@ function AppContent() {
     emptyTrash,
   } = useNotes(null);
 
-  const { folders, updateFolder } = useFolders();
+  const { folders, folderTree, createFolder, deleteFolder, updateFolder } = useFolders();
 
   useEffect(() => {
     if (saveError) {
@@ -730,6 +730,11 @@ function AppContent() {
               onOpenTrash={handleOpenTrash}
               selectedFolderId={selectedFolderId}
               onClearFolderSelection={handleClearFolderSelection}
+              folderTree={folderTree}
+              folders={folders}
+              createFolder={createFolder}
+              deleteFolder={deleteFolder}
+              updateFolder={updateFolder}
             />
             {!isMobile && sidebarOpen && (
               <div
