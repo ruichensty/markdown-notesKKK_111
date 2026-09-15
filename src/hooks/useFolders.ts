@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import type { Folder } from "@types";
 import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
 import { getAllDataCache } from "@utils/storage";
-import { buildFolderTree, type FolderNodeData } from "@utils/folderTree";
+import { buildFolderTree, collectFolderSubtreeIds, type FolderNodeData } from "@utils/folderTree";
 
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>(() => getAllDataCache()?.folders ?? []);
@@ -46,16 +46,7 @@ export function useFolders() {
 
   const deleteFolder = useCallback((id: string) => {
     setFolders(prev => {
-      const idsToDelete = new Set<string>();
-      const collectIds = (folderId: string) => {
-        idsToDelete.add(folderId);
-        for (const f of prev) {
-          if (f.parentId === folderId) {
-            collectIds(f.id);
-          }
-        }
-      };
-      collectIds(id);
+      const idsToDelete = collectFolderSubtreeIds(id, prev);
       return prev.filter(folder => !idsToDelete.has(folder.id));
     });
   }, []);

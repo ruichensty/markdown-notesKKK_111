@@ -4,6 +4,7 @@ import { generateId, formatDate } from "@utils/export";
 import { saveSingleNote, deleteSingleNote, loadNotes, loadSingleNote } from "@utils/storage";
 import { idbDeleteFile } from "@utils/indexedDBStorage";
 import { invalidateAllDataCache } from "@utils/storage";
+import { diffNotes } from "@utils/noteDiff";
 
 const SAVE_DEBOUNCE_MS = 300;
 const SAVE_RETRY_DELAYS_MS = [1000, 3000, 7000];
@@ -59,24 +60,7 @@ export function useNotes(selectedFolderId: string | null = null) {
 
   const persistChanges = useCallback(
     async (snapshot: Note[], previousNotes: Note[], isRetry = false): Promise<boolean> => {
-      const prevMap = new Map<string, Note>();
-      for (const n of previousNotes) prevMap.set(n.id, n);
-
-      const added: Note[] = [];
-      const updated: Note[] = [];
-
-      for (const note of snapshot) {
-        const prev = prevMap.get(note.id);
-        if (!prev) {
-          added.push(note);
-        } else if (prev.updatedAt !== note.updatedAt) {
-          updated.push(note);
-        }
-      }
-
-      const currentMap = new Map<string, unknown>();
-      for (const n of snapshot) currentMap.set(n.id, n);
-      const deleted = previousNotes.filter(n => !currentMap.has(n.id));
+      const { added, updated, deleted } = diffNotes(snapshot, previousNotes);
 
       if (added.length === 0 && updated.length === 0 && deleted.length === 0) return false;
 

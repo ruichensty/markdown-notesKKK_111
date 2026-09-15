@@ -1,5 +1,94 @@
 # 修改记录
 
+## 2026-09-15 — 性能优化与工程化
+
+### 1. 编辑与预览性能优化
+
+- **文件**: `src/components/NoteList.tsx`、`src/App.tsx`
+  - 移除 `currentNoteContent` prop，大纲内容改从 `notes` 派生，输入内容不再触发侧边栏重渲
+  - `sameNotes` 忽略正在编辑笔记的 `updatedAt`，编辑时侧边栏不再整体重渲
+- **文件**: `src/components/Preview.tsx`
+  - 预览内容用 `useDeferredValue` 包裹，ReactMarkdown 解析变为可中断的低优先级更新，长文档输入不再顿挫
+
+### 2. 核心业务纯函数提取 + 测试
+
+- **文件**: `src/utils/noteDiff.ts`（新增）
+  - 从 `useNotes.persistChanges` 提取 `diffNotes` 纯函数，识别新增/更新/删除笔记
+- **文件**: `src/utils/folderTree.ts`
+  - 新增 `collectFolderSubtreeIds`，从 `useFolders`/`NoteList` 的删除逻辑提取子树收集
+- 测试从 33 → 42 用例（新增 noteDiff、collectFolderSubtreeIds 测试）
+
+### 3. CI 与文件树修复
+
+- **文件**: `.github/workflows/ci.yml`（新增）
+  - 新增 GitHub Actions，自动执行 lint / type-check / test / build
+- **文件**: `src/index.css`、`src/components/FolderTree.tsx`、`folderTreeContext.ts`
+  - 清理文件树重复样式，修复 `contextValue`/`handleDragEnd` 的 `props` 依赖导致的无谓重渲
+  - 新建文件夹取消重命名时正确清空 `pendingRenameId`
+
+## 2026-09-14 — 文件树结构重构
+
+### 1. 修复双重 useFolders 数据不同步
+
+- `useFolders` 提升到 App 单例，通过 props 传给 NoteList，消除命令面板 folders 过期与潜在数据覆盖
+
+### 2. 文件树结构与 UI 重构
+
+- **文件**: `src/components/FolderNode.tsx`（新增）、`FolderTree.tsx`
+  - 从 `FolderTree` 拆分出 `FolderNode`/`SortableFolderNotes` 等，`FolderTree` 从 1050 行降至 386 行
+- **文件**: `src/components/folderTreeContext.ts`（新增）
+  - 用 Context 共享回调与数据结构，`FolderNode` props 从 30 个简化到 5 个
+- **文件**: `src/utils/folderTree.ts`
+  - 收敛 `buildFolderTree`/`flattenFolderTree`/`collectSubtreeIds`/`isFolderInSubtree` 到单点，统一 `FolderNodeData` 类型
+- 修复缩进叠加 bug（每层线性 +16px）、连接线对齐图标、新建文件夹自动进入重命名
+
+### 3. 编辑器 textarea 高度修复
+
+- **文件**: `src/components/Editor.tsx`
+  - 给 `editor-writing-surface` 补 `h-full`，修复 textarea 高度不足导致内容显示不完整
+
+## 2026-09-10 — 工程质量与依赖治理
+
+### 1. 依赖安全升级
+
+- `dompurify` 升级至 3.4.15，eslint/typescript-eslint/@vitejs/plugin-react 升级至最新
+- 用 `pnpm.overrides` 强制 `brace-expansion`/`browserslist`，依赖审计从 30 漏洞降至 0
+
+### 2. 测试基础设施搭建
+
+- **文件**: `vitest.config.ts`、`src/test/setup.ts`、`src/utils/__tests__/`（新增）
+  - 引入 vitest + testing-library，覆盖 `sortNotes`/`validateBackup`/`sanitizeFilename` 等
+
+### 3. 清理与文档
+
+- 移除未使用的 `tsparticles` 依赖，清理根目录残留文件
+- 拆分 `ContextMenuContext`，清理全部 lint 警告（0 error / 0 warning）
+- 更新 README / TECH_STACK / START，归档历史计划文档
+
+### 4. 性能优化
+
+- `ParticleBackground` 懒加载，主 bundle 从 626KB 降至 521KB
+- `FolderNode` 加 memo，消除 `|| []` 空数组引用不稳定问题
+
+## 2026-09-04 — 数据与 AI 功能增强
+
+### 1. 全量数据备份与迁移
+
+- 新增备份导出/导入，解决跨浏览器数据丢失问题
+
+### 2. 使用时长统计
+
+- 新增近 7 天时间线，修复历史数据跨天丢失问题
+
+### 3. AI 助手增强
+
+- 新增预设问题，支持一键发送与自定义管理
+- AI 回复支持语音播报，浏览器与云端 TTS 双引擎可切换
+
+## 2026-09-03 — AI 助手
+
+- 新增可拖拽 AI 助手机器人，支持多服务商流式对话
+
 ## 2026-05-29 — 性能优化
 
 ### 1. IndexedDB 增量更新替代全量写入

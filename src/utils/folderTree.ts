@@ -59,3 +59,18 @@ export function isFolderInSubtree<T extends { id: string; children?: T[] }>(
   };
   return check(subtree);
 }
+
+export function collectFolderSubtreeIds(
+  folderId: string,
+  folders: { id: string; parentId: string | null }[]
+): Set<string> {
+  const ids = new Set<string>();
+  const collect = (id: string) => {
+    ids.add(id);
+    for (const f of folders) {
+      if (f.parentId === id) collect(f.id);
+    }
+  };
+  collect(folderId);
+  return ids;
+}

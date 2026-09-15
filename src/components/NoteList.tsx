@@ -7,7 +7,7 @@ import type { SidebarTab } from "./SidebarTabs";
 import { FolderTree } from "./FolderTree";
 import { EmptyStateIllustration } from "./EmptyStateIllustration";
 import { useOutline, useDebounce } from "@hooks";
-import { flattenFolderTree, type FolderNodeData } from "@utils/folderTree";
+import { flattenFolderTree, collectFolderSubtreeIds, type FolderNodeData } from "@utils/folderTree";
 import { sortNotes } from "@utils/export";
 import type { Note, Folder } from "@types";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
@@ -153,15 +153,7 @@ function NoteList({
 
   const handleDeleteFolder = useCallback(
     (id: string) => {
-      const idsToDelete = new Set<string>();
-      const collectIds = (folderId: string) => {
-        idsToDelete.add(folderId);
-        for (const folder of folders) {
-          if (folder.parentId === folderId) collectIds(folder.id);
-        }
-      };
-
-      collectIds(id);
+      const idsToDelete = collectFolderSubtreeIds(id, folders);
       deleteFolder(id);
       onRemoveFolderFromNotes?.(Array.from(idsToDelete));
     },

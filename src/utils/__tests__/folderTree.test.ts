@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFolderTree } from "../folderTree";
+import { buildFolderTree, collectFolderSubtreeIds } from "../folderTree";
 
 interface Folder {
   id: string;
@@ -52,5 +52,31 @@ describe("buildFolderTree", () => {
     const tree = buildFolderTree(folders);
     expect(tree[0].name).toBe("A");
     expect(tree[0].parentId).toBeNull();
+  });
+});
+
+describe("collectFolderSubtreeIds", () => {
+  const folders = [
+    { id: "root", parentId: null },
+    { id: "child", parentId: "root" },
+    { id: "grandchild", parentId: "child" },
+    { id: "sibling", parentId: "root" },
+    { id: "unrelated", parentId: null },
+  ];
+
+  it("收集自身及所有后代 id", () => {
+    const ids = collectFolderSubtreeIds("root", folders);
+    expect([...ids].sort()).toEqual(["child", "grandchild", "root", "sibling"]);
+  });
+
+  it("叶子节点只收集自身", () => {
+    const ids = collectFolderSubtreeIds("grandchild", folders);
+    expect([...ids]).toEqual(["grandchild"]);
+  });
+
+  it("不包含无关文件夹", () => {
+    const ids = collectFolderSubtreeIds("child", folders);
+    expect(ids.has("unrelated")).toBe(false);
+    expect(ids.has("sibling")).toBe(false);
   });
 });
