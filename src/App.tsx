@@ -718,7 +718,6 @@ function AppContent() {
               getFormattedDate={getFormattedDate}
               sidebarWidth={sidebarDragWidth ?? settings.sidebarWidth}
               collapsed={!sidebarOpen}
-              currentNoteContent={currentNote?.content}
               onJumpToLine={handleJumpToLine}
               isMobile={isMobile}
               onBatchDelete={handleBatchDelete}

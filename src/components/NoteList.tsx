@@ -24,7 +24,6 @@ interface NoteListProps {
   getFormattedDate?: (id: string) => string;
   sidebarWidth?: number;
   collapsed?: boolean;
-  currentNoteContent?: string;
   onJumpToLine?: (line: number) => void;
   isMobile?: boolean;
   onBatchDelete?: (ids: string[]) => void;
@@ -68,7 +67,6 @@ function NoteList({
   searchInputRef,
   sidebarWidth = 280,
   collapsed = false,
-  currentNoteContent,
   onJumpToLine,
   onBatchDelete,
   onMoveNoteToFolder,
@@ -96,7 +94,11 @@ function NoteList({
   const [pendingRenameId, setPendingRenameId] = useState<string | null>(null);
 
   const { show: showContextMenu } = useContextMenu();
-  const headings = useOutline(currentNoteContent || "");
+  const outlineContent = useMemo(
+    () => notes.find(n => n.id === activeNoteId)?.content ?? "",
+    [notes, activeNoteId]
+  );
+  const headings = useOutline(outlineContent);
 
   const debouncedSearchQuery = useDebounce(searchQuery, 200);
 
@@ -641,7 +643,7 @@ function NoteList({
   );
 }
 
-function sameNotes(a: Note[], b: Note[]): boolean {
+function sameNotes(a: Note[], b: Note[], activeNoteId: string | null): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -649,7 +651,7 @@ function sameNotes(a: Note[], b: Note[]): boolean {
     const y = b[i];
     if (
       x.id !== y.id ||
-      x.updatedAt !== y.updatedAt ||
+      (x.id !== activeNoteId && x.updatedAt !== y.updatedAt) ||
       x.title !== y.title ||
       x.order !== y.order ||
       x.deletedAt !== y.deletedAt
@@ -662,14 +664,13 @@ function sameNotes(a: Note[], b: Note[]): boolean {
 
 export default memo(NoteList, (prevProps, nextProps) => {
   return (
-    sameNotes(prevProps.notes, nextProps.notes) &&
+    sameNotes(prevProps.notes, nextProps.notes, prevProps.activeNoteId) &&
     prevProps.activeNoteId === nextProps.activeNoteId &&
     prevProps.getFormattedDate === nextProps.getFormattedDate &&
     prevProps.onNoteSelect === nextProps.onNoteSelect &&
     prevProps.onNewNote === nextProps.onNewNote &&
     prevProps.onNoteDelete === nextProps.onNoteDelete &&
     prevProps.searchInputRef === nextProps.searchInputRef &&
-    prevProps.currentNoteContent === nextProps.currentNoteContent &&
     prevProps.onBatchDelete === nextProps.onBatchDelete &&
     prevProps.onBatchMoveToFolder === nextProps.onBatchMoveToFolder &&
     prevProps.onMoveNoteToFolder === nextProps.onMoveNoteToFolder &&

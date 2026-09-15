@@ -1,4 +1,4 @@
-import { useMemo, memo, lazy, Suspense, createContext, useContext } from "react";
+import { useMemo, memo, lazy, Suspense, createContext, useContext, useDeferredValue } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components, ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -168,6 +168,7 @@ interface PreviewProps {
 function Preview({ note, showLineNumbers = false }: PreviewProps) {
   const { theme } = useTheme();
   const debouncedContent = useAdaptiveDebounce(note.content || "", 150, 600, 1200);
+  const deferredContent = useDeferredValue(debouncedContent);
 
   const config = useMemo<PreviewConfig>(
     () => ({ theme, showLineNumbers }),
@@ -175,8 +176,8 @@ function Preview({ note, showLineNumbers = false }: PreviewProps) {
   );
 
   const memoizedContent = useMemo(
-    () => debouncedContent || "Start typing to see preview...",
-    [debouncedContent]
+    () => deferredContent || "Start typing to see preview...",
+    [deferredContent]
   );
 
   const memoizedComponents = useMemo<Components>(
