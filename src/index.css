@@ -1020,6 +1020,30 @@
   transform: scale(1.05);
 }
 
+.ai-bot--cyber-girl {
+  color: #75f7ff;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 34% 22%, hsl(190 100% 74% / 0.2), transparent 48%),
+    radial-gradient(circle at 76% 82%, hsl(315 100% 72% / 0.18), transparent 52%),
+    hsl(var(--card) / 0.9);
+  border-color: hsl(190 90% 70% / 0.38);
+  box-shadow:
+    0 14px 36px hsl(195 95% 45% / 0.18),
+    0 0 0 1px hsl(290 90% 78% / 0.16),
+    inset 0 1px 0 hsl(0 0% 100% / 0.68);
+}
+
+.ai-bot--cyber-girl.ai-bot--disabled {
+  filter: grayscale(0.65) saturate(0.7);
+  opacity: 0.86;
+}
+
+.ai-bot--cyber-girl.ai-bot--error {
+  color: #ff6b9d;
+  border-color: hsl(340 90% 66% / 0.48);
+}
+
 .ai-bot-badge {
   position: absolute;
   top: 6px;
@@ -1060,6 +1084,142 @@
   }
   50% {
     opacity: 0.35;
+  }
+}
+
+.cyber-avatar {
+  width: 92%;
+  height: 92%;
+  overflow: visible;
+}
+
+.cyber-avatar-hair-back,
+.cyber-avatar-side-hair,
+.cyber-avatar-bangs,
+.cyber-avatar-collar {
+  transform-origin: 32px 34px;
+  animation: cyber-breathe 3.4s ease-in-out infinite;
+}
+
+.cyber-avatar-eyes {
+  transform-origin: 32px 31px;
+  animation: cyber-blink 5s ease-in-out infinite;
+}
+
+.cyber-avatar-aura {
+  transform-origin: 32px 31px;
+  animation: cyber-aura 4s ease-in-out infinite;
+}
+
+.cyber-avatar-dots {
+  opacity: 0.45;
+  animation: cyber-data-float 2.8s ease-in-out infinite;
+}
+
+.cyber-avatar-chip {
+  animation: cyber-chip-pulse 2.4s ease-in-out infinite;
+}
+
+.cyber-avatar-error-mark {
+  opacity: 0;
+}
+
+.cyber-avatar-mouth {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.cyber-avatar--thinking .cyber-avatar-aura {
+  animation: cyber-thinking-ring 1s linear infinite;
+  opacity: 0.75;
+}
+
+.cyber-avatar--thinking .cyber-avatar-dots,
+.cyber-avatar--thinking .cyber-avatar-chip {
+  opacity: 1;
+  animation-duration: 0.9s;
+}
+
+.cyber-avatar--speaking .cyber-avatar-mouth {
+  animation: cyber-talk 0.34s ease-in-out infinite;
+}
+
+.cyber-avatar--disabled .cyber-avatar-aura,
+.cyber-avatar--disabled .cyber-avatar-dots {
+  opacity: 0.15;
+}
+
+.cyber-avatar--error .cyber-avatar-error-mark {
+  opacity: 1;
+  animation: cyber-chip-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes cyber-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-0.7px) scale(1.012);
+  }
+}
+
+@keyframes cyber-blink {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  94% {
+    transform: scaleY(0.18);
+  }
+}
+
+@keyframes cyber-aura {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.5;
+  }
+}
+
+@keyframes cyber-thinking-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cyber-data-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes cyber-chip-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes cyber-talk {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(2.1) translateY(-0.6px);
   }
 }
 
@@ -1742,6 +1902,7 @@
   .ai-bot-eyes,
   .ai-bot-antenna,
   .ai-bot-badge,
+  .cyber-avatar *,
   .ai-chat-panel {
     animation: none;
   }

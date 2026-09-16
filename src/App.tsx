@@ -847,6 +847,7 @@ function AppContent() {
           hidden={!settings.aiAssistant}
           noteTitle={currentNote ? currentNote.title || "Untitled" : null}
           noteContent={currentNote?.content ?? null}
+          avatarMode={settings.aiAvatarMode}
           config={aiConfig}
           tts={aiTts}
           quickPrompts={aiQuickPrompts}

@@ -30,7 +30,16 @@ export interface SpeechDispatchSettings {
   api: ApiSpeechSettings;
 }
 
-export function useSpeech() {
+export interface SpeechController {
+  supported: boolean;
+  voices: SpeechSynthesisVoice[];
+  speakingKey: string | null;
+  speechError: string | null;
+  speakMessage: (key: string, text: string, settings: SpeechDispatchSettings) => void;
+  stop: () => void;
+}
+
+export function useSpeech(): SpeechController {
   const [supported] = useState(isSpeechSupported);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);

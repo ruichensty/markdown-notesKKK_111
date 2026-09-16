@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
 import type { AiProviderId } from "@types";
+import type { AvatarMode } from "@components/avatar/types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface Settings {
@@ -23,6 +24,7 @@ export interface Settings {
   expandedFolders: string[];
   particleEffects: boolean;
   aiAssistant: boolean;
+  aiAvatarMode: AvatarMode;
   aiWidgetPos: { x: number; y: number } | null;
   aiProvider: AiProviderId;
   aiApiBaseUrl: string;
@@ -60,6 +62,7 @@ const DEFAULT_SETTINGS: Settings = {
   expandedFolders: [],
   particleEffects: true,
   aiAssistant: true,
+  aiAvatarMode: "cyber-girl",
   aiWidgetPos: null,
   aiProvider: "zhipu",
   aiApiBaseUrl: "https://open.bigmodel.cn/api/paas/v4",

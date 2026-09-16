@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAiChat } from "@hooks/useAiChat";
+import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
+import { AvatarRenderer } from "./avatar/AvatarRenderer";
+import type { AvatarMode, AvatarState } from "./avatar/types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
@@ -10,6 +13,7 @@ export interface AiAssistantWidgetProps {
   hidden: boolean;
   noteTitle: string | null;
   noteContent: string | null;
+  avatarMode: AvatarMode;
   config: { baseUrl: string; apiKey: string; model: string };
   tts: TtsPanelConfig;
   quickPrompts: AiQuickPrompt[];
@@ -44,6 +48,7 @@ export function AiAssistantWidget({
   hidden,
   noteTitle,
   noteContent,
+  avatarMode,
   config,
   tts,
   quickPrompts,
@@ -59,7 +64,17 @@ export function AiAssistantWidget({
   const [panelOpen, setPanelOpen] = useState(false);
 
   const chat = useAiChat(config);
+  const speech = useSpeech();
   const keyMissing = !config.apiKey.trim() || !config.baseUrl.trim();
+  const avatarState: AvatarState = keyMissing
+    ? "disabled"
+    : chat.error
+      ? "error"
+      : speech.speakingKey
+        ? "speaking"
+        : chat.streaming
+          ? "thinking"
+          : "idle";
 
   /* eslint-disable react-hooks/set-state-in-effect -- sync persisted widget position from settings */
   useEffect(() => {
@@ -129,69 +144,14 @@ export function AiAssistantWidget({
   return (
     <>
       <div
-        className={`ai-bot ${chat.streaming ? "ai-bot--thinking" : ""}`}
+        className={`ai-bot ai-bot--${avatarMode} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""}`}
         style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
         onPointerDown={handlePointerDown}
         role="button"
         aria-label="AI 助手，点击打开对话，可拖动"
-        title="AI 助手：点击对话，按住拖动"
+        title={`${avatarMode === "cyber-girl" ? "赛博少女" : "AI 助手"}：点击对话，按住拖动`}
       >
-        <svg viewBox="0 0 64 64" fill="none" className="ai-bot-svg">
-          <line
-            x1="32"
-            y1="6"
-            x2="32"
-            y2="12"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <circle cx="32" cy="5" r="3" fill="currentColor" className="ai-bot-antenna" />
-          <rect x="10" y="12" width="44" height="32" rx="12" fill="currentColor" opacity="0.16" />
-          <rect
-            x="10"
-            y="12"
-            width="44"
-            height="32"
-            rx="12"
-            stroke="currentColor"
-            strokeWidth="2.4"
-          />
-          <g className="ai-bot-eyes">
-            <circle cx="24" cy="27" r="3.4" fill="currentColor" />
-            <circle cx="40" cy="27" r="3.4" fill="currentColor" />
-          </g>
-          <path
-            d="M26 34.5q6 4 12 0"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-          <g className="ai-bot-arms">
-            <path
-              d="M10 30H4m6 6H6"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-            />
-            <path
-              d="M54 30h6m-6 6h4"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-            />
-          </g>
-          <rect x="22" y="48" width="20" height="8" rx="4" fill="currentColor" opacity="0.16" />
-          <rect
-            x="22"
-            y="48"
-            width="20"
-            height="8"
-            rx="4"
-            stroke="currentColor"
-            strokeWidth="2.2"
-          />
-        </svg>
+        <AvatarRenderer mode={avatarMode} state={avatarState} />
         {keyMissing && <span className="ai-bot-badge" title="尚未配置 API Key" />}
       </div>
 
@@ -202,6 +162,7 @@ export function AiAssistantWidget({
           noteContent={noteContent}
           keyMissing={keyMissing}
           tts={tts}
+          speech={speech}
           quickPrompts={quickPrompts}
           onToggleTtsAuto={onToggleTtsAuto}
           onToggleTtsEngine={onToggleTtsEngine}

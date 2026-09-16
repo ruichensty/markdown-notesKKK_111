@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiChat } from "@types";
-import { useSpeech } from "@hooks/useSpeech";
+import type { SpeechController } from "@hooks/useSpeech";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface TtsPanelConfig {
@@ -18,6 +18,7 @@ interface AiChatPanelProps {
   noteContent: string | null;
   keyMissing: boolean;
   tts: TtsPanelConfig;
+  speech: SpeechController;
   quickPrompts: AiQuickPrompt[];
   onToggleTtsAuto: () => void;
   onToggleTtsEngine: () => void;
@@ -65,6 +66,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
     noteContent,
     keyMissing,
     tts,
+    speech,
     quickPrompts,
     onToggleTtsAuto,
     onToggleTtsEngine,
@@ -86,7 +88,6 @@ export function AiChatPanel(props: AiChatPanelProps) {
   const [useNoteContext, setUseNoteContext] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const speech = useSpeech();
   const { supported: ttsSupported, speakMessage, stop: stopSpeech, speechError } = speech;
   const autoReadKeysRef = useRef<Set<string>>(new Set());
   const style = panelStyle(anchor);

@@ -508,6 +508,34 @@ function SettingsPanelBase({
               </div>
 
               <div>
+                <label className="block text-[10px] text-muted-foreground mb-1.5">
+                  AI 助手形象
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "robot", name: "机器人", icon: "🤖" },
+                    { id: "cyber-girl", name: "赛博少女", icon: "✨" },
+                  ].map(opt => {
+                    const active = settings.aiAvatarMode === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleChange("aiAvatarMode", opt.id)}
+                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-medium transition-all border ${
+                          active
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                        }`}
+                      >
+                        <span className="text-sm leading-none">{opt.icon}</span>
+                        {opt.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-[10px] text-muted-foreground mb-1.5">语音引擎</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
