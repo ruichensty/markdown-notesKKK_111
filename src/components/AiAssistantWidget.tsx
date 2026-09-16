@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAiChat } from "@hooks/useAiChat";
 import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
-import type { AvatarMode, AvatarState } from "./avatar/types";
+import type { AvatarAnimation, AvatarMode, AvatarState } from "./avatar/types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
@@ -14,6 +14,9 @@ export interface AiAssistantWidgetProps {
   noteTitle: string | null;
   noteContent: string | null;
   avatarMode: AvatarMode;
+  avatarTips: boolean;
+  avatarTipDismissed: boolean;
+  avatarAnimation: AvatarAnimation;
   config: { baseUrl: string; apiKey: string; model: string };
   tts: TtsPanelConfig;
   quickPrompts: AiQuickPrompt[];
@@ -21,6 +24,7 @@ export interface AiAssistantWidgetProps {
   onToggleTtsEngine: () => void;
   pos: { x: number; y: number } | null;
   onPosChange: (pos: { x: number; y: number }) => void;
+  onDismissAvatarTip: () => void;
   onOpenSettings: () => void;
 }
 
@@ -49,6 +53,9 @@ export function AiAssistantWidget({
   noteTitle,
   noteContent,
   avatarMode,
+  avatarTips,
+  avatarTipDismissed,
+  avatarAnimation,
   config,
   tts,
   quickPrompts,
@@ -56,12 +63,15 @@ export function AiAssistantWidget({
   onToggleTtsEngine,
   pos,
   onPosChange,
+  onDismissAvatarTip,
   onOpenSettings,
 }: AiAssistantWidgetProps) {
   const [botPos, setBotPos] = useState<{ x: number; y: number }>(() =>
     pos ? clampPos(pos.x, pos.y) : defaultPos()
   );
   const [panelOpen, setPanelOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
+  const lastStreamingRef = useRef(false);
 
   const chat = useAiChat(config);
   const speech = useSpeech();
@@ -74,7 +84,33 @@ export function AiAssistantWidget({
         ? "speaking"
         : chat.streaming
           ? "thinking"
-          : "idle";
+          : celebrating
+            ? "happy"
+            : panelOpen && !noteTitle
+              ? "confused"
+              : "idle";
+
+  const tipText = keyMissing
+    ? "先配置 API Key，我就能开始帮你写作啦"
+    : noteContent && noteContent.length > 1600
+      ? "这篇笔记有点长，要我帮你提炼大纲吗？"
+      : !noteTitle
+        ? "打开一篇笔记后，我可以帮你总结、润色和提取待办"
+        : "需要我帮你总结或润色当前笔记吗？";
+  const showTip = avatarTips && !avatarTipDismissed && !panelOpen;
+
+  useEffect(() => {
+    if (lastStreamingRef.current && !chat.streaming && !chat.error && !keyMissing) {
+      setCelebrating(true);
+    }
+    lastStreamingRef.current = chat.streaming;
+  }, [chat.streaming, chat.error, keyMissing]);
+
+  useEffect(() => {
+    if (!celebrating) return;
+    const timer = window.setTimeout(() => setCelebrating(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [celebrating]);
 
   /* eslint-disable react-hooks/set-state-in-effect -- sync persisted widget position from settings */
   useEffect(() => {
@@ -145,6 +181,7 @@ export function AiAssistantWidget({
     <>
       <div
         className={`ai-bot ai-bot--${avatarMode} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""}`}
+        data-animation={avatarAnimation}
         style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
         onPointerDown={handlePointerDown}
         role="button"
@@ -154,6 +191,23 @@ export function AiAssistantWidget({
         <AvatarRenderer mode={avatarMode} state={avatarState} />
         {keyMissing && <span className="ai-bot-badge" title="尚未配置 API Key" />}
       </div>
+
+      {showTip && (
+        <div
+          className="ai-avatar-tip"
+          style={{ left: Math.max(8, botPos.x - 232), top: Math.max(8, botPos.y - 8) }}
+        >
+          <button
+            type="button"
+            className="ai-avatar-tip-close"
+            onClick={onDismissAvatarTip}
+            title="不再显示提示"
+          >
+            ×
+          </button>
+          <span>{tipText}</span>
+        </div>
+      )}
 
       {panelOpen && (
         <AiChatPanel

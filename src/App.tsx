@@ -848,6 +848,9 @@ function AppContent() {
           noteTitle={currentNote ? currentNote.title || "Untitled" : null}
           noteContent={currentNote?.content ?? null}
           avatarMode={settings.aiAvatarMode}
+          avatarTips={settings.aiAvatarTips}
+          avatarTipDismissed={settings.aiAvatarTipDismissed}
+          avatarAnimation={settings.aiAvatarAnimation}
           config={aiConfig}
           tts={aiTts}
           quickPrompts={aiQuickPrompts}
@@ -855,6 +858,7 @@ function AppContent() {
           onToggleTtsEngine={handleToggleTtsEngine}
           pos={settings.aiWidgetPos}
           onPosChange={handleAiPosChange}
+          onDismissAvatarTip={() => updateSettings({ aiAvatarTipDismissed: true })}
           onOpenSettings={handleToggleSettings}
         />
 

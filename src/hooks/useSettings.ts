@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
 import type { AiProviderId } from "@types";
-import type { AvatarMode } from "@components/avatar/types";
+import type { AvatarAnimation, AvatarMode } from "@components/avatar/types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface Settings {
@@ -25,6 +25,9 @@ export interface Settings {
   particleEffects: boolean;
   aiAssistant: boolean;
   aiAvatarMode: AvatarMode;
+  aiAvatarTips: boolean;
+  aiAvatarTipDismissed: boolean;
+  aiAvatarAnimation: AvatarAnimation;
   aiWidgetPos: { x: number; y: number } | null;
   aiProvider: AiProviderId;
   aiApiBaseUrl: string;
@@ -63,6 +66,9 @@ const DEFAULT_SETTINGS: Settings = {
   particleEffects: true,
   aiAssistant: true,
   aiAvatarMode: "cyber-girl",
+  aiAvatarTips: true,
+  aiAvatarTipDismissed: false,
+  aiAvatarAnimation: "full",
   aiWidgetPos: null,
   aiProvider: "zhipu",
   aiApiBaseUrl: "https://open.bigmodel.cn/api/paas/v4",

@@ -536,6 +536,52 @@ function SettingsPanelBase({
               </div>
 
               <div>
+                <label className="block text-[10px] text-muted-foreground mb-1.5">数字人动画</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "full", name: "完整" },
+                    { id: "reduced", name: "轻量" },
+                    { id: "off", name: "关闭" },
+                  ].map(opt => {
+                    const active = settings.aiAvatarAnimation === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleChange("aiAvatarAnimation", opt.id)}
+                        className={`py-2 rounded-xl text-[11px] font-medium transition-all border ${
+                          active
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                        }`}
+                      >
+                        {opt.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-foreground">主动提示气泡</span>
+                  <span className="text-[10px] text-muted-foreground ml-1.5">
+                    展示笔记总结等提示
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    handleChange("aiAvatarTips", !settings.aiAvatarTips);
+                    handleChange("aiAvatarTipDismissed", false);
+                  }}
+                  className={`relative w-10 h-6 rounded-full transition-colors ${settings.aiAvatarTips ? "bg-primary" : "bg-muted"}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${settings.aiAvatarTips ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+
+              <div>
                 <label className="block text-[10px] text-muted-foreground mb-1.5">语音引擎</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
