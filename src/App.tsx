@@ -31,6 +31,12 @@ import {
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
 import type { Note } from "@types";
+import {
+  buildMobileOpenUrl,
+  getMobileViewMode,
+  getSharedViewMode,
+  type SharedViewMode,
+} from "@utils/mobileOpenUrl";
 import { applyTemplateVariables } from "@utils/template";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
@@ -38,26 +44,7 @@ import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 const Preview = lazy(() => import("./components/Preview"));
 const ParticleBackground = lazy(() => import("./components/ParticleBackground"));
 
-type ViewMode = "home" | "editor" | "preview" | "split";
-
-function getSharedViewMode(value: string | null): ViewMode | null {
-  if (value === "home" || value === "editor" || value === "preview" || value === "split") {
-    return value;
-  }
-  return null;
-}
-
-function buildMobileOpenUrl(noteId: string | null, viewMode: ViewMode): string {
-  const url = new URL(window.location.href);
-  if (noteId) {
-    url.searchParams.set("note", noteId);
-    url.searchParams.set("view", viewMode === "home" ? "split" : viewMode);
-  } else {
-    url.searchParams.delete("note");
-    url.searchParams.set("view", "home");
-  }
-  return url.toString();
-}
+type ViewMode = SharedViewMode;
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
@@ -163,7 +150,12 @@ function AppContent() {
   const { folders, folderTree, createFolder, deleteFolder, updateFolder } = useFolders();
 
   const mobileOpenUrl = useMemo(
-    () => buildMobileOpenUrl(viewMode === "home" ? null : currentNoteId, viewMode),
+    () =>
+      buildMobileOpenUrl(
+        window.location.href,
+        viewMode === "home" ? null : currentNoteId,
+        viewMode
+      ),
     [currentNoteId, viewMode]
   );
 
@@ -176,8 +168,9 @@ function AppContent() {
     const sharedViewMode = getSharedViewMode(params.get("view"));
 
     if (!sharedNoteId) {
-      if (sharedViewMode === "home") window.setTimeout(() => setViewMode("home"), 0);
-      return;
+      if (sharedViewMode !== "home") return;
+      const timer = window.setTimeout(() => setViewMode("home"), 0);
+      return () => window.clearTimeout(timer);
     }
 
     const noteExists = allNotes.some(note => note.id === sharedNoteId);
@@ -186,15 +179,14 @@ function AppContent() {
       return;
     }
 
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setSelectedFolderId(null);
       setCurrentNoteId(sharedNoteId);
       setSidebarOpen(!isMobile);
-      setViewMode(
-        isMobile ? (sharedViewMode === "preview" ? "preview" : "editor") : sharedViewMode || "split"
-      );
+      setViewMode(isMobile ? getMobileViewMode(sharedViewMode) : sharedViewMode || "split");
       showToast("已打开二维码指定笔记", "success");
     }, 0);
+    return () => window.clearTimeout(timer);
   }, [allNotes, isMobile, loaded, setCurrentNoteId, showToast]);
 
   useEffect(() => {
