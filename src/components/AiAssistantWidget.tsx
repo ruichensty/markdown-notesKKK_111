@@ -3,11 +3,13 @@ import { useAiChat } from "@hooks/useAiChat";
 import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
-import type { AvatarAnimation, AvatarMode, AvatarState } from "./avatar/types";
+import type { AvatarAnimation, AvatarMode, AvatarState } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
 const EDGE_MARGIN = 8;
+const TIP_WIDTH = 220;
+const TIP_GAP = 12;
 
 export interface AiAssistantWidgetProps {
   hidden: boolean;
@@ -70,8 +72,16 @@ export function AiAssistantWidget({
     pos ? clampPos(pos.x, pos.y) : defaultPos()
   );
   const [panelOpen, setPanelOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [hoverGrace, setHoverGrace] = useState(false);
+  const [tipVisible, setTipVisible] = useState(true);
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
   const [celebrating, setCelebrating] = useState(false);
   const lastStreamingRef = useRef(false);
+  const hoverGraceTimerRef = useRef(0);
 
   const chat = useAiChat(config);
   const speech = useSpeech();
@@ -97,7 +107,13 @@ export function AiAssistantWidget({
       : !noteTitle
         ? "打开一篇笔记后，我可以帮你总结、润色和提取待办"
         : "需要我帮你总结或润色当前笔记吗？";
-  const showTip = avatarTips && !avatarTipDismissed && !panelOpen;
+  const tipEligible = avatarTips && !avatarTipDismissed && !panelOpen;
+  const showTip = tipEligible && (tipVisible || hovered || hoverGrace);
+  const tipOnLeft = botPos.x > viewport.width / 2;
+  const tipLeft = tipOnLeft
+    ? Math.max(8, botPos.x - TIP_WIDTH - TIP_GAP)
+    : Math.min(viewport.width - TIP_WIDTH - 8, botPos.x + BOT_SIZE + TIP_GAP);
+  const tipTop = Math.min(Math.max(8, botPos.y - 8), Math.max(8, viewport.height - 92));
 
   useEffect(() => {
     if (lastStreamingRef.current && !chat.streaming && !chat.error && !keyMissing) {
@@ -124,10 +140,15 @@ export function AiAssistantWidget({
 
   useEffect(() => {
     const onResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
       setBotPos(prev => clampPos(prev.x, prev.y));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    return () => window.clearTimeout(hoverGraceTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -138,6 +159,14 @@ export function AiAssistantWidget({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [panelOpen]);
+
+  useEffect(() => {
+    if (!tipEligible) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets a transient timed bubble when the contextual tip changes
+    setTipVisible(true);
+    const timer = window.setTimeout(() => setTipVisible(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [tipEligible, tipText]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -175,6 +204,19 @@ export function AiAssistantWidget({
     [botPos, onPosChange]
   );
 
+  const handleTipHoverEnter = useCallback(() => {
+    window.clearTimeout(hoverGraceTimerRef.current);
+    setHoverGrace(false);
+    setHovered(true);
+  }, []);
+
+  const handleTipHoverLeave = useCallback(() => {
+    setHovered(false);
+    setHoverGrace(true);
+    window.clearTimeout(hoverGraceTimerRef.current);
+    hoverGraceTimerRef.current = window.setTimeout(() => setHoverGrace(false), 220);
+  }, []);
+
   if (hidden) return null;
 
   return (
@@ -184,6 +226,8 @@ export function AiAssistantWidget({
         data-animation={avatarAnimation}
         style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
         onPointerDown={handlePointerDown}
+        onPointerEnter={handleTipHoverEnter}
+        onPointerLeave={handleTipHoverLeave}
         role="button"
         aria-label="AI 助手，点击打开对话，可拖动"
         title={`${avatarMode === "cyber-girl" ? "赛博少女" : "AI 助手"}：点击对话，按住拖动`}
@@ -194,8 +238,10 @@ export function AiAssistantWidget({
 
       {showTip && (
         <div
-          className="ai-avatar-tip"
-          style={{ left: Math.max(8, botPos.x - 232), top: Math.max(8, botPos.y - 8) }}
+          className={`ai-avatar-tip ${tipOnLeft ? "ai-avatar-tip--left" : "ai-avatar-tip--right"}`}
+          style={{ left: tipLeft, top: tipTop }}
+          onPointerEnter={handleTipHoverEnter}
+          onPointerLeave={handleTipHoverLeave}
         >
           <button
             type="button"

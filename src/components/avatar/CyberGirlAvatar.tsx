@@ -1,4 +1,4 @@
-import type { AvatarProps } from "./types";
+import type { AvatarProps } from "@types";
 
 export function CyberGirlAvatar({ state }: AvatarProps) {
   return (

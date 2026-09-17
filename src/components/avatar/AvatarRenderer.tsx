@@ -1,6 +1,6 @@
 import { CyberGirlAvatar } from "./CyberGirlAvatar";
 import { RobotAvatar } from "./RobotAvatar";
-import type { AvatarMode, AvatarState } from "./types";
+import type { AvatarMode, AvatarState } from "@types";
 
 interface AvatarRendererProps {
   mode: AvatarMode;

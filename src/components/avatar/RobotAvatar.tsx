@@ -1,4 +1,4 @@
-import type { AvatarProps } from "./types";
+import type { AvatarProps } from "@types";
 
 export function RobotAvatar({ state }: AvatarProps) {
   const thinking = state === "thinking";

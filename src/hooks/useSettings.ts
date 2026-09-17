@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
 import type { AiProviderId } from "@types";
-import type { AvatarAnimation, AvatarMode } from "@components/avatar/types";
+import type { AvatarAnimation, AvatarMode } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface Settings {
