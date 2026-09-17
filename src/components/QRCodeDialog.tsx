@@ -5,6 +5,7 @@ import { useToast } from "@context";
 interface QRCodeDialogProps {
   open: boolean;
   url: string;
+  hasCurrentNote: boolean;
   onClose: () => void;
 }
 
@@ -17,7 +18,7 @@ function isLocalhostUrl(url: string): boolean {
   }
 }
 
-function QRCodeDialogBase({ open, url, onClose }: QRCodeDialogProps) {
+function QRCodeDialogBase({ open, url, hasCurrentNote, onClose }: QRCodeDialogProps) {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const { showToast } = useToast();
   const isLocal = useMemo(() => isLocalhostUrl(url), [url]);
@@ -77,7 +78,9 @@ function QRCodeDialogBase({ open, url, onClose }: QRCodeDialogProps) {
         <div className="qr-dialog-header">
           <div>
             <h2>手机扫码打开</h2>
-            <p>在手机浏览器中打开当前应用页面</p>
+            <p>
+              {hasCurrentNote ? "在手机浏览器中尝试打开当前笔记" : "在手机浏览器中打开当前应用页面"}
+            </p>
           </div>
           <button type="button" className="qr-dialog-close" onClick={onClose} title="关闭">
             ×
@@ -99,7 +102,9 @@ function QRCodeDialogBase({ open, url, onClose }: QRCodeDialogProps) {
         )}
 
         <div className="qr-dialog-note">
-          扫码只会打开应用页面。笔记数据存储在各自浏览器中，不会自动同步。
+          {hasCurrentNote
+            ? "扫码会带上当前笔记定位信息。只有手机端已有这篇笔记时才会自动打开，数据不会自动同步。"
+            : "扫码只会打开应用页面。笔记数据存储在各自浏览器中，不会自动同步。"}
         </div>
 
         <div className="qr-dialog-url" title={url}>

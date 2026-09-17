@@ -38,6 +38,27 @@ import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 const Preview = lazy(() => import("./components/Preview"));
 const ParticleBackground = lazy(() => import("./components/ParticleBackground"));
 
+type ViewMode = "home" | "editor" | "preview" | "split";
+
+function getSharedViewMode(value: string | null): ViewMode | null {
+  if (value === "home" || value === "editor" || value === "preview" || value === "split") {
+    return value;
+  }
+  return null;
+}
+
+function buildMobileOpenUrl(noteId: string | null, viewMode: ViewMode): string {
+  const url = new URL(window.location.href);
+  if (noteId) {
+    url.searchParams.set("note", noteId);
+    url.searchParams.set("view", viewMode === "home" ? "split" : viewMode);
+  } else {
+    url.searchParams.delete("note");
+    url.searchParams.set("view", "home");
+  }
+  return url.toString();
+}
+
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
   useEffect(() => {
@@ -101,7 +122,7 @@ function AppContent() {
   );
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [viewMode, setViewMode] = useState<"home" | "editor" | "preview" | "split">("home");
+  const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [showSettings, setShowSettings] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -112,6 +133,7 @@ function AppContent() {
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
   const newNoteLockRef = useRef(false);
+  const sharedUrlHandledRef = useRef(false);
 
   const { templates } = useTemplates();
 
@@ -139,6 +161,41 @@ function AppContent() {
   } = useNotes(null);
 
   const { folders, folderTree, createFolder, deleteFolder, updateFolder } = useFolders();
+
+  const mobileOpenUrl = useMemo(
+    () => buildMobileOpenUrl(viewMode === "home" ? null : currentNoteId, viewMode),
+    [currentNoteId, viewMode]
+  );
+
+  useEffect(() => {
+    if (!loaded || sharedUrlHandledRef.current) return;
+    sharedUrlHandledRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const sharedNoteId = params.get("note");
+    const sharedViewMode = getSharedViewMode(params.get("view"));
+
+    if (!sharedNoteId) {
+      if (sharedViewMode === "home") window.setTimeout(() => setViewMode("home"), 0);
+      return;
+    }
+
+    const noteExists = allNotes.some(note => note.id === sharedNoteId);
+    if (!noteExists) {
+      showToast("此设备没有这篇笔记，数据不会自动同步", "warning", 5000);
+      return;
+    }
+
+    window.setTimeout(() => {
+      setSelectedFolderId(null);
+      setCurrentNoteId(sharedNoteId);
+      setSidebarOpen(!isMobile);
+      setViewMode(
+        isMobile ? (sharedViewMode === "preview" ? "preview" : "editor") : sharedViewMode || "split"
+      );
+      showToast("已打开二维码指定笔记", "success");
+    }, 0);
+  }, [allNotes, isMobile, loaded, setCurrentNoteId, showToast]);
 
   useEffect(() => {
     if (saveError) {
@@ -928,7 +985,8 @@ function AppContent() {
       />
       <QRCodeDialog
         open={showQrDialog}
-        url={window.location.href}
+        url={mobileOpenUrl}
+        hasCurrentNote={viewMode !== "home" && Boolean(currentNoteId)}
         onClose={() => setShowQrDialog(false)}
       />
     </>
