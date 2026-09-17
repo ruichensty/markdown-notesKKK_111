@@ -26,6 +26,7 @@ import {
   TemplatePicker,
   TrashView,
   AiAssistantWidget,
+  QRCodeDialog,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
@@ -106,6 +107,7 @@ function AppContent() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showQrDialog, setShowQrDialog] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
@@ -755,6 +757,7 @@ function AppContent() {
             viewMode={viewMode}
             onViewModeChange={handleViewModeChange}
             onToggleSettings={handleToggleSettings}
+            onOpenQrCode={() => setShowQrDialog(true)}
             onGoHome={handleGoHome}
             focusMode={settings.focusMode}
             typewriterMode={settings.typewriterMode}
@@ -922,6 +925,11 @@ function AppContent() {
         onRestore={handleRestoreFromTrash}
         onPurge={handlePurgeFromTrash}
         onEmptyTrash={handleEmptyTrash}
+      />
+      <QRCodeDialog
+        open={showQrDialog}
+        url={window.location.href}
+        onClose={() => setShowQrDialog(false)}
       />
     </>
   );

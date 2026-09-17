@@ -15,6 +15,7 @@ export { SortableNoteList } from "./SortableNoteList";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { AttachmentImage } from "./AttachmentImage";
 export { UsageTimeWidget } from "./UsageTimeWidget";
+export { QRCodeDialog } from "./QRCodeDialog";
 export { DoodleCanvas } from "./DoodleCanvas";
 export { HealthReminderPopup } from "./HealthReminderPopup";
 export { ContextMenuProvider } from "./ContextMenu";
