@@ -15,3 +15,4 @@ export * from "./useTypingSound";
 export * from "./useEyeCare";
 export * from "./useHealthReminder";
 export * from "./useTemplates";
+export * from "./useStoredImageUrl";

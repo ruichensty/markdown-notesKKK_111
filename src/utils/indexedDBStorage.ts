@@ -234,6 +234,27 @@ export async function idbDeleteFile(id: string): Promise<void> {
   await tx<undefined>(STORE_FILES, "readwrite", s => s.delete(id));
 }
 
+export async function idbUpdateSettingsAndAvatarFile(
+  settings: unknown,
+  nextFile: StoredFileRecord | null,
+  previousFileId: string | null
+): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction([STORE_SETTINGS, STORE_FILES], "readwrite");
+    const settingsStore = transaction.objectStore(STORE_SETTINGS);
+    const filesStore = transaction.objectStore(STORE_FILES);
+
+    settingsStore.put({ key: "settings", value: settings });
+    if (nextFile) filesStore.put(nextFile);
+    if (previousFileId && previousFileId !== nextFile?.id) filesStore.delete(previousFileId);
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
 export async function idbGetAllTemplates(): Promise<NoteTemplate[]> {
   return tx<NoteTemplate[]>(STORE_TEMPLATES, "readonly", s => s.getAll());
 }

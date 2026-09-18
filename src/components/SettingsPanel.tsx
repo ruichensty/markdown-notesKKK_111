@@ -5,11 +5,15 @@ import { AI_PROVIDER_PRESETS, getPreset } from "@utils/aiClient";
 import { TTS_API_PRESETS, getTtsPreset } from "@utils/ttsApi";
 import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
 import { createBackup, restoreBackup } from "@utils/backup";
+import { validateAvatarImage } from "@utils/avatarImage";
+import { idbUpdateSettingsAndAvatarFile } from "@utils/indexedDBStorage";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
 import { useDialogA11y } from "@hooks";
+import { AvatarRenderer } from "./avatar/AvatarRenderer";
+import type { AvatarMode, AvatarSkin } from "@types";
 
 const HOME_LAYOUTS = [
   { id: "quotes", name: "名言", desc: "随机金句 · 沉浸起笔" },
@@ -18,6 +22,19 @@ const HOME_LAYOUTS = [
   { id: "writer", name: "纸墨", desc: "作家桌面 · 最近笔记" },
   { id: "curtain", name: "字帘", desc: "交互字帘 · 创意起笔" },
 ] as const;
+
+const AI_AVATARS: { id: AvatarMode; name: string; desc: string }[] = [
+  { id: "robot", name: "小方", desc: "经典机械助手" },
+  { id: "cyber-girl", name: "星弥", desc: "未来数字伙伴" },
+  { id: "cat", name: "灵感猫", desc: "轻松陪伴写作" },
+  { id: "custom-image", name: "自定义", desc: "上传透明贴纸" },
+];
+
+const AI_SKINS: { id: AvatarSkin; name: string; colors: [string, string] }[] = [
+  { id: "aurora", name: "极光", colors: ["#38d9ff", "#8b7cff"] },
+  { id: "peach", name: "蜜桃", colors: ["#ff9f8f", "#ffcf70"] },
+  { id: "midnight", name: "午夜", colors: ["#56d6b5", "#172b4d"] },
+];
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -45,7 +62,13 @@ function SettingsPanelBase({
   );
   const [pendingBackupFile, setPendingBackupFile] = useState<File | null>(null);
   const [showBackupConfirm, setShowBackupConfirm] = useState(false);
+  const [avatarImageBusy, setAvatarImageBusy] = useState(false);
+  const [avatarImageMessage, setAvatarImageMessage] = useState<{
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const avatarImageInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -141,6 +164,69 @@ function SettingsPanelBase({
       setShowBackupConfirm(false);
       setPendingBackupFile(null);
       setBackupBusy(false);
+    }
+  };
+
+  const handleAvatarImageUpload = async (file: File) => {
+    if (avatarImageBusy || backupBusy) return;
+    setAvatarImageBusy(true);
+    setAvatarImageMessage(null);
+    try {
+      const info = await validateAvatarImage(file);
+      const imageId = `ai-avatar-${crypto.randomUUID()}`;
+      const previousImageId = settings.aiAvatarCustomImageId;
+      const data = await file.arrayBuffer();
+      const nextSettings: Settings = {
+        ...settings,
+        aiAvatarCustomImageId: imageId,
+        aiAvatarMode: "custom-image",
+      };
+      await idbUpdateSettingsAndAvatarFile(
+        nextSettings,
+        {
+          id: imageId,
+          noteId: "__ai_avatar__",
+          data,
+          fileName: file.name,
+          fileType: file.type,
+          size: data.byteLength,
+          createdAt: Date.now(),
+        },
+        previousImageId
+      );
+      onUpdate(nextSettings);
+      setAvatarImageMessage({
+        kind: "ok",
+        text: `已应用 ${info.width} × ${info.height} 图片`,
+      });
+    } catch (error) {
+      setAvatarImageMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "上传失败，请重试",
+      });
+    } finally {
+      setAvatarImageBusy(false);
+    }
+  };
+
+  const handleAvatarImageDelete = async () => {
+    const imageId = settings.aiAvatarCustomImageId;
+    if (!imageId || avatarImageBusy || backupBusy) return;
+    setAvatarImageBusy(true);
+    setAvatarImageMessage(null);
+    try {
+      const nextSettings: Settings = {
+        ...settings,
+        aiAvatarCustomImageId: null,
+        aiAvatarMode: "robot",
+      };
+      await idbUpdateSettingsAndAvatarFile(nextSettings, null, imageId);
+      onUpdate(nextSettings);
+      setAvatarImageMessage({ kind: "ok", text: "已删除自定义形象，并切换回小方" });
+    } catch {
+      setAvatarImageMessage({ kind: "error", text: "删除失败，请重试" });
+    } finally {
+      setAvatarImageBusy(false);
     }
   };
 
@@ -511,24 +597,109 @@ function SettingsPanelBase({
                 <label className="block text-[10px] text-muted-foreground mb-1.5">
                   AI 助手形象
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "robot", name: "机器人", icon: "🤖" },
-                    { id: "cyber-girl", name: "赛博少女", icon: "✨" },
-                  ].map(opt => {
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="AI 助手形象">
+                  {AI_AVATARS.map(opt => {
                     const active = settings.aiAvatarMode === opt.id;
                     return (
                       <button
                         key={opt.id}
-                        onClick={() => handleChange("aiAvatarMode", opt.id)}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-medium transition-all border ${
-                          active
-                            ? "bg-primary/10 border-primary text-primary shadow-sm"
-                            : "bg-muted/40 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                        onClick={() => {
+                          if (opt.id === "custom-image" && !settings.aiAvatarCustomImageId) {
+                            avatarImageInputRef.current?.click();
+                            return;
+                          }
+                          handleChange("aiAvatarMode", opt.id);
+                        }}
+                        aria-pressed={active}
+                        title={opt.desc}
+                        className={`settings-avatar-card ai-bot--skin-${settings.aiAvatarSkin} ${
+                          active ? "settings-avatar-card--active" : ""
                         }`}
                       >
-                        <span className="text-sm leading-none">{opt.icon}</span>
-                        {opt.name}
+                        <span
+                          className={`settings-avatar-preview ai-bot--${opt.id}`}
+                          data-avatar-animation={settings.aiAvatarAnimation}
+                        >
+                          <AvatarRenderer
+                            mode={opt.id}
+                            state="idle"
+                            customImageId={settings.aiAvatarCustomImageId}
+                          />
+                        </span>
+                        <span className="settings-avatar-name">{opt.name}</span>
+                        <span className="settings-avatar-desc">{opt.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  ref={avatarImageInputRef}
+                  type="file"
+                  accept="image/png,image/webp,.png,.webp"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void handleAvatarImageUpload(file);
+                  }}
+                />
+                <div className="settings-avatar-upload-row">
+                  <button
+                    type="button"
+                    className="settings-avatar-upload-btn"
+                    onClick={() => avatarImageInputRef.current?.click()}
+                    disabled={avatarImageBusy || backupBusy}
+                  >
+                    {avatarImageBusy
+                      ? "处理中…"
+                      : settings.aiAvatarCustomImageId
+                        ? "替换自定义图片"
+                        : "上传 PNG / WebP"}
+                  </button>
+                  {settings.aiAvatarCustomImageId && (
+                    <button
+                      type="button"
+                      className="settings-avatar-delete-btn"
+                      onClick={() => void handleAvatarImageDelete()}
+                      disabled={avatarImageBusy || backupBusy}
+                    >
+                      删除
+                    </button>
+                  )}
+                </div>
+                <p className="settings-avatar-upload-hint">
+                  透明贴纸模式 · 最大 5 MB · 尺寸不超过 4096 × 4096
+                </p>
+                {avatarImageMessage && (
+                  <p
+                    className={`settings-avatar-upload-message settings-avatar-upload-message--${avatarImageMessage.kind}`}
+                    role="status"
+                  >
+                    {avatarImageMessage.text}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1.5">外观皮肤</label>
+                <div className="grid grid-cols-3 gap-2" role="group" aria-label="AI 助手外观皮肤">
+                  {AI_SKINS.map(skin => {
+                    const active = settings.aiAvatarSkin === skin.id;
+                    return (
+                      <button
+                        key={skin.id}
+                        type="button"
+                        onClick={() => handleChange("aiAvatarSkin", skin.id)}
+                        aria-pressed={active}
+                        className={`settings-avatar-skin ${active ? "settings-avatar-skin--active" : ""}`}
+                      >
+                        <span
+                          className="settings-avatar-swatch"
+                          style={{
+                            background: `linear-gradient(135deg, ${skin.colors[0]}, ${skin.colors[1]})`,
+                          }}
+                        />
+                        <span>{skin.name}</span>
                       </button>
                     );
                   })}
@@ -974,7 +1145,7 @@ function SettingsPanelBase({
                   type="button"
                   className="settings-backup-btn"
                   onClick={() => void handleExportBackup()}
-                  disabled={backupBusy}
+                  disabled={backupBusy || avatarImageBusy}
                 >
                   {backupBusy ? "处理中…" : "导出全部数据"}
                 </button>
@@ -982,7 +1153,7 @@ function SettingsPanelBase({
                   type="button"
                   className="settings-backup-btn"
                   onClick={() => backupInputRef.current?.click()}
-                  disabled={backupBusy}
+                  disabled={backupBusy || avatarImageBusy}
                 >
                   导入数据
                 </button>

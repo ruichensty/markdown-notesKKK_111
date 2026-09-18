@@ -3,7 +3,7 @@ import { useAiChat } from "@hooks/useAiChat";
 import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
-import type { AvatarAnimation, AvatarMode, AvatarState } from "@types";
+import type { AvatarAnimation, AvatarMode, AvatarSkin, AvatarState } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
@@ -16,6 +16,8 @@ export interface AiAssistantWidgetProps {
   noteTitle: string | null;
   noteContent: string | null;
   avatarMode: AvatarMode;
+  avatarSkin: AvatarSkin;
+  avatarCustomImageId: string | null;
   avatarTips: boolean;
   avatarTipDismissed: boolean;
   avatarAnimation: AvatarAnimation;
@@ -55,6 +57,8 @@ export function AiAssistantWidget({
   noteTitle,
   noteContent,
   avatarMode,
+  avatarSkin,
+  avatarCustomImageId,
   avatarTips,
   avatarTipDismissed,
   avatarAnimation,
@@ -222,17 +226,24 @@ export function AiAssistantWidget({
   return (
     <>
       <div
-        className={`ai-bot ai-bot--${avatarMode} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""}`}
+        className={`ai-bot ai-bot--${avatarMode} ai-bot--skin-${avatarSkin} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""}`}
         data-animation={avatarAnimation}
         style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
         onPointerDown={handlePointerDown}
         onPointerEnter={handleTipHoverEnter}
         onPointerLeave={handleTipHoverLeave}
+        onKeyDown={e => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          setPanelOpen(open => !open);
+        }}
         role="button"
+        tabIndex={0}
+        aria-expanded={panelOpen}
         aria-label="AI 助手，点击打开对话，可拖动"
-        title={`${avatarMode === "cyber-girl" ? "赛博少女" : "AI 助手"}：点击对话，按住拖动`}
+        title={`${avatarMode === "cyber-girl" ? "赛博少女" : avatarMode === "cat" ? "灵感猫" : avatarMode === "custom-image" ? "自定义伙伴" : "机器人"}：点击对话，按住拖动`}
       >
-        <AvatarRenderer mode={avatarMode} state={avatarState} />
+        <AvatarRenderer mode={avatarMode} state={avatarState} customImageId={avatarCustomImageId} />
         {keyMissing && <span className="ai-bot-badge" title="尚未配置 API Key" />}
       </div>
 

@@ -900,6 +900,8 @@ function AppContent() {
           noteTitle={currentNote ? currentNote.title || "Untitled" : null}
           noteContent={currentNote?.content ?? null}
           avatarMode={settings.aiAvatarMode}
+          avatarSkin={settings.aiAvatarSkin}
+          avatarCustomImageId={settings.aiAvatarCustomImageId}
           avatarTips={settings.aiAvatarTips}
           avatarTipDismissed={settings.aiAvatarTipDismissed}
           avatarAnimation={settings.aiAvatarAnimation}

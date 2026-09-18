@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
 import type { AiProviderId } from "@types";
-import type { AvatarAnimation, AvatarMode } from "@types";
+import type { AvatarAnimation, AvatarMode, AvatarSkin } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 export interface Settings {
@@ -25,6 +25,8 @@ export interface Settings {
   particleEffects: boolean;
   aiAssistant: boolean;
   aiAvatarMode: AvatarMode;
+  aiAvatarSkin: AvatarSkin;
+  aiAvatarCustomImageId: string | null;
   aiAvatarTips: boolean;
   aiAvatarTipDismissed: boolean;
   aiAvatarAnimation: AvatarAnimation;
@@ -66,6 +68,8 @@ const DEFAULT_SETTINGS: Settings = {
   particleEffects: true,
   aiAssistant: true,
   aiAvatarMode: "cyber-girl",
+  aiAvatarSkin: "aurora",
+  aiAvatarCustomImageId: null,
   aiAvatarTips: true,
   aiAvatarTipDismissed: false,
   aiAvatarAnimation: "full",
@@ -90,24 +94,32 @@ const SETTINGS_KEY = "settings";
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [hydrated, setHydrated] = useState(false);
+  const pendingUpdatesRef = useRef<Partial<Settings>>({});
 
   useEffect(() => {
     idbGetSetting<Settings>(SETTINGS_KEY)
       .then(stored => {
-        if (stored) setSettings({ ...DEFAULT_SETTINGS, ...stored });
+        setSettings({ ...DEFAULT_SETTINGS, ...stored, ...pendingUpdatesRef.current });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setHydrated(true));
   }, []);
 
-  const updateSettings = useCallback((updates: Partial<Settings>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
-  }, []);
+  const updateSettings = useCallback(
+    (updates: Partial<Settings>) => {
+      if (!hydrated) pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates };
+      setSettings(prev => ({ ...prev, ...updates }));
+    },
+    [hydrated]
+  );
 
   useEffect(() => {
+    if (!hydrated) return;
     idbSetSetting(SETTINGS_KEY, settings).catch(err => {
       console.error("Failed to save settings:", err);
     });
-  }, [settings]);
+  }, [hydrated, settings]);
 
   return {
     settings,
