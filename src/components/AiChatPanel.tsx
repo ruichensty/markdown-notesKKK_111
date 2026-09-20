@@ -37,6 +37,16 @@ interface AiChatPanelProps {
 }
 
 const PANEL_WIDTH = 348;
+const PANEL_MAX_HEIGHT = 520;
+const VIEWPORT_MARGIN = 8;
+const BOTTOM_THRESHOLD = 56;
+
+interface ViewportBounds {
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+}
 
 const MarkdownMessage = memo(function MarkdownMessage({ content }: { content: string }) {
   return (
@@ -46,16 +56,34 @@ const MarkdownMessage = memo(function MarkdownMessage({ content }: { content: st
   );
 });
 
-function panelStyle(anchor: { x: number; y: number }): React.CSSProperties {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const width = Math.min(PANEL_WIDTH, vw - 16);
-  const height = Math.min(520, vh - 16);
+function getViewportBounds(): ViewportBounds {
+  const viewport = window.visualViewport;
+  return viewport
+    ? {
+        width: viewport.width,
+        height: viewport.height,
+        left: viewport.offsetLeft,
+        top: viewport.offsetTop,
+      }
+    : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
+}
+
+function panelStyle(
+  anchor: { x: number; y: number },
+  viewport: ViewportBounds
+): React.CSSProperties {
+  const right = viewport.left + viewport.width;
+  const bottom = viewport.top + viewport.height;
+  const width = Math.max(0, Math.min(PANEL_WIDTH, viewport.width - VIEWPORT_MARGIN * 2));
+  const height = Math.max(0, Math.min(PANEL_MAX_HEIGHT, viewport.height - VIEWPORT_MARGIN * 2));
   const left =
-    anchor.x > vw / 2
-      ? Math.max(8, anchor.x - width - 12)
-      : Math.min(vw - width - 8, anchor.x + 68);
-  const top = Math.min(Math.max(8, anchor.y - 40), vh - height - 8);
+    anchor.x > viewport.left + viewport.width / 2
+      ? Math.max(viewport.left + VIEWPORT_MARGIN, anchor.x - width - 12)
+      : Math.min(right - width - VIEWPORT_MARGIN, anchor.x + 68);
+  const top = Math.min(
+    Math.max(viewport.top + VIEWPORT_MARGIN, anchor.y - 40),
+    bottom - height - VIEWPORT_MARGIN
+  );
   return { left, top, width, height };
 }
 
@@ -87,14 +115,43 @@ export function AiChatPanel(props: AiChatPanelProps) {
   const [input, setInput] = useState("");
   const [useNoteContext, setUseNoteContext] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [pendingDeleteChatId, setPendingDeleteChatId] = useState<string | null>(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [viewport, setViewport] = useState<ViewportBounds>(getViewportBounds);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelDeleteButtonRef = useRef<HTMLButtonElement>(null);
+  const followOutputRef = useRef(true);
   const { supported: ttsSupported, speakMessage, stop: stopSpeech, speechError } = speech;
   const autoReadKeysRef = useRef<Set<string>>(new Set());
-  const style = panelStyle(anchor);
+  const style = panelStyle(anchor, viewport);
 
   const messages = useMemo(() => activeChat?.messages ?? [], [activeChat]);
   const ttsAvailable = ttsSupported || tts.engine === "api";
   const apiReady = tts.api.apiKey.trim() !== "" && tts.api.baseUrl.trim() !== "";
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (keyMissing) settingsButtonRef.current?.focus();
+      else inputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [keyMissing]);
+
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    const handleViewportChange = () => setViewport(getViewportBounds());
+    window.addEventListener("resize", handleViewportChange);
+    visualViewport?.addEventListener("resize", handleViewportChange);
+    visualViewport?.addEventListener("scroll", handleViewportChange);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      visualViewport?.removeEventListener("resize", handleViewportChange);
+      visualViewport?.removeEventListener("scroll", handleViewportChange);
+    };
+  }, []);
 
   useEffect(() => {
     return () => stopSpeech();
@@ -129,7 +186,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
 
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
+    if (list && followOutputRef.current) list.scrollTop = list.scrollHeight;
   }, [activeChat?.messages, streaming]);
 
   const lastAssistantStreaming =
@@ -147,12 +204,28 @@ export function AiChatPanel(props: AiChatPanelProps) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [quickOpen]);
 
+  useEffect(() => {
+    if (!pendingDeleteChatId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setPendingDeleteChatId(null);
+      window.requestAnimationFrame(() => deleteButtonRef.current?.focus());
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [pendingDeleteChatId]);
+
   const sendPrompt = (prompt: AiQuickPrompt) => {
     if (streaming || keyMissing) return;
+    if (prompt.needsNote && (!useNoteContext || noteTitle === null)) return;
     setQuickOpen(false);
-    const withNote = useNoteContext || (prompt.needsNote === true && noteTitle !== null);
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
     const noteContext =
-      withNote && noteTitle !== null ? { title: noteTitle, content: noteContent ?? "" } : null;
+      useNoteContext && noteTitle !== null
+        ? { title: noteTitle, content: noteContent ?? "" }
+        : null;
     onSend(prompt.text, noteContext);
   };
 
@@ -163,8 +236,59 @@ export function AiChatPanel(props: AiChatPanelProps) {
       useNoteContext && noteTitle !== null
         ? { title: noteTitle, content: noteContent ?? "" }
         : null;
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
     onSend(text, noteContext);
     setInput("");
+  };
+
+  const handleListScroll = () => {
+    const list = listRef.current;
+    if (!list) return;
+    const awayFromBottom =
+      list.scrollHeight - list.scrollTop - list.clientHeight > BOTTOM_THRESHOLD;
+    followOutputRef.current = !awayFromBottom;
+    setShowJumpToLatest(awayFromBottom);
+  };
+
+  const scrollToLatest = () => {
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
+    const list = listRef.current;
+    list?.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+  };
+
+  const confirmDeleteChat = () => {
+    if (!pendingDeleteChatId) return;
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
+    onDeleteChat(pendingDeleteChatId);
+    setPendingDeleteChatId(null);
+  };
+
+  const requestDeleteChat = (id: string) => {
+    setPendingDeleteChatId(id);
+    window.requestAnimationFrame(() => cancelDeleteButtonRef.current?.focus());
+  };
+
+  const cancelDeleteChat = () => {
+    setPendingDeleteChatId(null);
+    window.requestAnimationFrame(() => deleteButtonRef.current?.focus());
+  };
+
+  const handleSelectChat = (id: string) => {
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
+    setPendingDeleteChatId(null);
+    onSelectChat(id);
+  };
+
+  const handleNewChat = () => {
+    followOutputRef.current = true;
+    setShowJumpToLatest(false);
+    setPendingDeleteChatId(null);
+    onNewChat();
+    window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -176,9 +300,22 @@ export function AiChatPanel(props: AiChatPanelProps) {
   };
 
   return (
-    <div className="ai-chat-panel" style={style} role="dialog" aria-label="AI 助手对话">
+    <div
+      id="ai-assistant-dialog"
+      className="ai-chat-panel"
+      style={style}
+      role="dialog"
+      aria-labelledby="ai-chat-title"
+    >
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {streaming
+          ? "AI 正在生成回复"
+          : speech.speakingKey
+            ? "正在朗读 AI 回复"
+            : error || speechError || "AI 助手已就绪"}
+      </div>
       <div className="ai-chat-header">
-        <div className="ai-chat-header-title">
+        <div id="ai-chat-title" className="ai-chat-header-title">
           <span className="ai-chat-header-dot" />
           AI 助手
         </div>
@@ -187,9 +324,14 @@ export function AiChatPanel(props: AiChatPanelProps) {
             <select
               className="ai-chat-select"
               value={activeChatId ?? ""}
-              onChange={e => onSelectChat(e.target.value)}
+              onChange={e => handleSelectChat(e.target.value)}
               aria-label="切换会话"
             >
+              {activeChatId === null && (
+                <option value="" disabled>
+                  新会话
+                </option>
+              )}
               {chats.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.title || "新会话"}
@@ -197,17 +339,25 @@ export function AiChatPanel(props: AiChatPanelProps) {
               ))}
             </select>
           )}
-          <button type="button" className="ai-chat-icon-btn" onClick={onNewChat} title="新会话">
+          <button
+            type="button"
+            className="ai-chat-icon-btn"
+            onClick={handleNewChat}
+            title="新会话"
+            aria-label="新建会话"
+          >
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M8 3v10M13 8H3" strokeLinecap="round" />
             </svg>
           </button>
           {activeChat && (
             <button
+              ref={deleteButtonRef}
               type="button"
               className="ai-chat-icon-btn"
-              onClick={() => onDeleteChat(activeChat.id)}
+              onClick={() => requestDeleteChat(activeChat.id)}
               title="删除当前会话"
+              aria-label="删除当前会话"
             >
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
                 <path d="M3 4.5h10M6.5 4.5V3h3v1.5M5 4.5l.6 8h4.8l.6-8" strokeLinecap="round" />
@@ -222,6 +372,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
               onClose();
             }}
             title="关闭 (Esc)"
+            aria-label="关闭 AI 助手"
           >
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
@@ -230,16 +381,35 @@ export function AiChatPanel(props: AiChatPanelProps) {
         </div>
       </div>
 
+      {pendingDeleteChatId && (
+        <div className="ai-chat-confirm" role="alertdialog" aria-label="确认删除当前会话">
+          <span>删除当前会话？此操作无法撤销。</span>
+          <div className="ai-chat-confirm-actions">
+            <button ref={cancelDeleteButtonRef} type="button" onClick={cancelDeleteChat}>
+              取消
+            </button>
+            <button type="button" className="ai-chat-confirm-delete" onClick={confirmDeleteChat}>
+              删除
+            </button>
+          </div>
+        </div>
+      )}
+
       {keyMissing && (
         <div className="ai-chat-notice">
           <p>尚未配置 AI 服务。需要在设置中填写 API Key 后才能对话，密钥仅保存在本机。</p>
-          <button type="button" className="ai-chat-notice-btn" onClick={onOpenSettings}>
+          <button
+            ref={settingsButtonRef}
+            type="button"
+            className="ai-chat-notice-btn"
+            onClick={onOpenSettings}
+          >
             去设置配置
           </button>
         </div>
       )}
 
-      <div className="ai-chat-list" ref={listRef}>
+      <div className="ai-chat-list" ref={listRef} onScroll={handleListScroll}>
         {messages.length === 0 && (
           <>
             <div className="ai-chat-empty">
@@ -255,9 +425,15 @@ export function AiChatPanel(props: AiChatPanelProps) {
                     type="button"
                     className="ai-quick-chip"
                     onClick={() => sendPrompt(p)}
-                    disabled={streaming}
+                    disabled={
+                      streaming || (p.needsNote === true && (!useNoteContext || noteTitle === null))
+                    }
                     title={
-                      p.needsNote && noteTitle === null ? `${p.text}（当前未打开笔记）` : p.text
+                      p.needsNote && noteTitle === null
+                        ? `${p.text}（当前未打开笔记）`
+                        : p.needsNote && !useNoteContext
+                          ? "请先开启“引用当前笔记”"
+                          : p.text
                     }
                   >
                     {p.label}
@@ -265,6 +441,14 @@ export function AiChatPanel(props: AiChatPanelProps) {
                 ))}
               </div>
             )}
+            {!keyMissing &&
+              quickPrompts.some(prompt => prompt.needsNote) &&
+              noteTitle !== null &&
+              !useNoteContext && (
+                <div className="ai-chat-context-note">
+                  开启“引用当前笔记”后，可使用总结、润色等笔记操作
+                </div>
+              )}
           </>
         )}
         {messages.map((m, i) =>
@@ -294,6 +478,11 @@ export function AiChatPanel(props: AiChatPanelProps) {
                         speech.speakingKey === `${activeChatId}:${i}`
                           ? "停止朗读"
                           : `朗读此消息（${tts.engine === "api" ? "云端语音" : "浏览器语音"}）`
+                      }
+                      aria-label={
+                        speech.speakingKey === `${activeChatId}:${i}`
+                          ? "停止朗读此回复"
+                          : "朗读此 AI 回复"
                       }
                     >
                       {speech.speakingKey === `${activeChatId}:${i}` ? (
@@ -328,15 +517,30 @@ export function AiChatPanel(props: AiChatPanelProps) {
             </div>
           )
         )}
-        {lastAssistantStreaming && messages[messages.length - 1].content && (
-          <button type="button" className="ai-chat-stop" onClick={onStop}>
-            停止生成
-          </button>
-        )}
       </div>
 
-      {error && <div className="ai-chat-error">{error}</div>}
-      {speechError && <div className="ai-chat-error">{speechError}</div>}
+      {streaming && (
+        <button type="button" className="ai-chat-stop" onClick={onStop}>
+          停止生成
+        </button>
+      )}
+
+      {showJumpToLatest && (
+        <button type="button" className="ai-chat-jump-latest" onClick={scrollToLatest}>
+          ↓ 回到最新
+        </button>
+      )}
+
+      {error && (
+        <div className="ai-chat-error" role="alert">
+          {error}
+        </div>
+      )}
+      {speechError && (
+        <div className="ai-chat-error" role="alert">
+          {speechError}
+        </div>
+      )}
 
       <div className="ai-chat-input-area">
         <div className="ai-chat-toolbar">
@@ -345,6 +549,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
             className={`ai-chat-chip ${useNoteContext ? "ai-chat-chip--active" : ""}`}
             onClick={() => setUseNoteContext(v => !v)}
             disabled={noteTitle === null}
+            aria-pressed={useNoteContext}
             title={
               noteTitle === null
                 ? "当前没有打开的笔记"
@@ -360,6 +565,8 @@ export function AiChatPanel(props: AiChatPanelProps) {
                 className={`ai-chat-chip ${quickOpen ? "ai-chat-chip--active" : ""}`}
                 onClick={() => setQuickOpen(o => !o)}
                 disabled={streaming}
+                aria-expanded={quickOpen}
+                aria-controls="ai-quick-prompt-menu"
                 title="快捷提问：点击选择预设问题直接发送"
               >
                 ⚡ 快捷
@@ -367,15 +574,30 @@ export function AiChatPanel(props: AiChatPanelProps) {
               {quickOpen && (
                 <>
                   <div className="ai-quick-backdrop" onClick={() => setQuickOpen(false)} />
-                  <div className="ai-quick-popover" role="menu" aria-label="快捷提问">
+                  <div
+                    id="ai-quick-prompt-menu"
+                    className="ai-quick-popover"
+                    role="menu"
+                    aria-label="快捷提问"
+                  >
                     {quickPrompts.map(p => (
                       <button
                         key={p.id}
                         type="button"
                         className="ai-quick-item"
                         onClick={() => sendPrompt(p)}
-                        disabled={streaming}
+                        disabled={
+                          streaming ||
+                          (p.needsNote === true && (!useNoteContext || noteTitle === null))
+                        }
                         role="menuitem"
+                        title={
+                          p.needsNote && noteTitle === null
+                            ? "当前没有打开的笔记"
+                            : p.needsNote && !useNoteContext
+                              ? "请先开启“引用当前笔记”"
+                              : p.text
+                        }
                       >
                         <span className="ai-quick-item-label">{p.label}</span>
                         <span className="ai-quick-item-text">{p.text}</span>
@@ -404,6 +626,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
                   ? `当前：浏览器语音，点击切换到云端语音${apiReady ? "" : "（未配置，将打开设置）"}`
                   : "当前：云端语音，点击切回浏览器语音"
               }
+              aria-label={`切换语音引擎，当前为${tts.engine === "api" ? "云端语音" : "浏览器语音"}`}
             >
               {tts.engine === "browser" ? "🔊 浏览器语音" : "☁️ 云端语音"}
             </button>
@@ -414,6 +637,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
               className={`ai-chat-chip ${tts.auto ? "ai-chat-chip--active" : ""}`}
               onClick={onToggleTtsAuto}
               title="AI 回复完成后自动朗读（引擎、音色与语速在设置中调整）"
+              aria-pressed={tts.auto}
             >
               自动朗读
             </button>
@@ -422,6 +646,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
         </div>
         <div className="ai-chat-input-row">
           <textarea
+            ref={inputRef}
             className="ai-chat-input"
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -429,6 +654,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
             placeholder={keyMissing ? "请先在设置中配置 API Key…" : "输入消息…"}
             rows={2}
             disabled={keyMissing}
+            aria-label="发送给 AI 助手的消息"
           />
           <button
             type="button"

@@ -84,8 +84,11 @@ export function AiAssistantWidget({
     height: window.innerHeight,
   }));
   const [celebrating, setCelebrating] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const botRef = useRef<HTMLDivElement>(null);
   const lastStreamingRef = useRef(false);
   const hoverGraceTimerRef = useRef(0);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
 
   const chat = useAiChat(config);
   const speech = useSpeech();
@@ -152,7 +155,11 @@ export function AiAssistantWidget({
   }, []);
 
   useEffect(() => {
-    return () => window.clearTimeout(hoverGraceTimerRef.current);
+    return () => {
+      window.clearTimeout(hoverGraceTimerRef.current);
+      dragCleanupRef.current?.();
+      document.body.style.userSelect = "";
+    };
   }, []);
 
   useEffect(() => {
@@ -176,9 +183,11 @@ export function AiAssistantWidget({
     (e: React.PointerEvent) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       e.preventDefault();
+      dragCleanupRef.current?.();
       const startX = e.clientX;
       const startY = e.clientY;
       const origin = botPos;
+      const previousUserSelect = document.body.style.userSelect;
       let moved = false;
 
       const onMove = (ev: PointerEvent) => {
@@ -186,27 +195,48 @@ export function AiAssistantWidget({
         const dy = ev.clientY - startY;
         if (!moved && Math.hypot(dx, dy) > 5) {
           moved = true;
+          setDragging(true);
         }
         if (moved) {
           setBotPos(clampPos(origin.x + dx, origin.y + dy));
         }
       };
-      const onUp = (ev: PointerEvent) => {
+
+      const cleanup = () => {
         document.removeEventListener("pointermove", onMove);
         document.removeEventListener("pointerup", onUp);
-        document.body.style.userSelect = "";
+        document.removeEventListener("pointercancel", onCancel);
+        document.body.style.userSelect = previousUserSelect;
+        dragCleanupRef.current = null;
+      };
+
+      const finish = (ev: PointerEvent, cancelled: boolean) => {
+        cleanup();
+        setDragging(false);
+        if (cancelled) return;
         if (moved) {
           onPosChange(clampPos(origin.x + (ev.clientX - startX), origin.y + (ev.clientY - startY)));
         } else {
           setPanelOpen(o => !o);
         }
       };
+
+      const onUp = (ev: PointerEvent) => finish(ev, false);
+      const onCancel = (ev: PointerEvent) => finish(ev, true);
+
       document.body.style.userSelect = "none";
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onCancel);
+      dragCleanupRef.current = cleanup;
     },
     [botPos, onPosChange]
   );
+
+  const handleClosePanel = useCallback(() => {
+    setPanelOpen(false);
+    window.requestAnimationFrame(() => botRef.current?.focus());
+  }, []);
 
   const handleTipHoverEnter = useCallback(() => {
     window.clearTimeout(hoverGraceTimerRef.current);
@@ -226,7 +256,8 @@ export function AiAssistantWidget({
   return (
     <>
       <div
-        className={`ai-bot ai-bot--${avatarMode} ai-bot--skin-${avatarSkin} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""}`}
+        ref={botRef}
+        className={`ai-bot ai-bot--${avatarMode} ai-bot--skin-${avatarSkin} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""} ${dragging ? "ai-bot--dragging" : ""}`}
         data-animation={avatarAnimation}
         style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
         onPointerDown={handlePointerDown}
@@ -240,6 +271,7 @@ export function AiAssistantWidget({
         role="button"
         tabIndex={0}
         aria-expanded={panelOpen}
+        aria-controls="ai-assistant-dialog"
         aria-label="AI 助手，点击打开对话，可拖动"
         title={`${avatarMode === "cyber-girl" ? "赛博少女" : avatarMode === "cat" ? "灵感猫" : avatarMode === "custom-image" ? "自定义伙伴" : "机器人"}：点击对话，按住拖动`}
       >
@@ -287,7 +319,7 @@ export function AiAssistantWidget({
           onStop={chat.stop}
           onNewChat={chat.newChat}
           onDeleteChat={chat.deleteChat}
-          onClose={() => setPanelOpen(false)}
+          onClose={handleClosePanel}
           onOpenSettings={onOpenSettings}
         />
       )}
