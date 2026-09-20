@@ -3,6 +3,8 @@ import {
   validateBackup,
   arrayBufferToBase64,
   base64ToArrayBuffer,
+  encryptBackupFile,
+  decryptBackupFile,
 } from "../backup";
 
 const validBackup = {
@@ -79,5 +81,33 @@ describe("base64 编解码", () => {
     const base64 = arrayBufferToBase64(bytes.buffer);
     const restored = base64ToArrayBuffer(base64);
     expect(new Uint8Array(restored)).toEqual(bytes);
+  });
+});
+
+describe("加密备份", () => {
+  it("使用密码加密后可以完整解密", async () => {
+    const backup = validateBackup(validBackup);
+    const encrypted = await encryptBackupFile(backup, "correct-password");
+    const restored = await decryptBackupFile(encrypted, "correct-password");
+    expect(restored).toEqual(backup);
+    expect(encrypted.cipher.dataBase64).not.toContain("markdown-notes-backup");
+  });
+
+  it("错误密码无法解密", async () => {
+    const encrypted = await encryptBackupFile(validateBackup(validBackup), "correct-password");
+    await expect(decryptBackupFile(encrypted, "wrong-password")).rejects.toThrow(/密码错误|损坏/);
+  });
+
+  it("篡改密文后认证失败", async () => {
+    const encrypted = await encryptBackupFile(validateBackup(validBackup), "correct-password");
+    const first = encrypted.cipher.dataBase64[0];
+    const tampered = {
+      ...encrypted,
+      cipher: {
+        ...encrypted.cipher,
+        dataBase64: `${first === "A" ? "B" : "A"}${encrypted.cipher.dataBase64.slice(1)}`,
+      },
+    };
+    await expect(decryptBackupFile(tampered, "correct-password")).rejects.toThrow(/密码错误|损坏/);
   });
 });

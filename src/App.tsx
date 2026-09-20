@@ -51,6 +51,7 @@ import {
   buildAiNoteContext,
   deriveAiNoteTitle,
 } from "@utils/aiNoteActions";
+import { cleanupOrphanedFiles } from "@utils/storageMaintenance";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
@@ -107,7 +108,13 @@ function LoadingScreen() {
 function AppContent() {
   const { showToast } = useToast();
   const { handleStorageError } = useErrorHandler();
-  const { settings, updateSettings } = useSettings();
+  const {
+    settings,
+    updateSettings,
+    saveError: settingsSaveError,
+    retrySave: retrySettingsSave,
+    flush: flushSettings,
+  } = useSettings();
   const { theme, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
 
@@ -134,8 +141,9 @@ function AppContent() {
   const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
   const newNoteLockRef = useRef(false);
   const sharedUrlHandledRef = useRef(false);
+  const storageMaintenanceRanRef = useRef(false);
 
-  const { templates } = useTemplates();
+  const { templates, saveError: templateSaveError, retrySave: retryTemplateSave } = useTemplates();
 
   const {
     notes,
@@ -160,7 +168,16 @@ function AppContent() {
     emptyTrash,
   } = useNotes(null);
 
-  const { folders, folderTree, createFolder, deleteFolder, updateFolder } = useFolders();
+  const {
+    folders,
+    folderTree,
+    createFolder,
+    deleteFolder,
+    updateFolder,
+    saveError: folderSaveError,
+    retrySave: retryFolderSave,
+    flush: flushFolders,
+  } = useFolders();
 
   const mobileOpenUrl = useMemo(
     () =>
@@ -203,6 +220,16 @@ function AppContent() {
   }, [allNotes, isMobile, loaded, setCurrentNoteId, showToast]);
 
   useEffect(() => {
+    if (!loaded || storageMaintenanceRanRef.current) return;
+    storageMaintenanceRanRef.current = true;
+    void cleanupOrphanedFiles()
+      .then(count => {
+        if (count > 0) showToast(`已清理 ${count} 个未使用附件`, "success");
+      })
+      .catch(error => console.error("Failed to clean orphaned files:", error));
+  }, [loaded, showToast]);
+
+  useEffect(() => {
     if (saveError) {
       showToast("保存失败，请检查存储空间后重试", "error", 0, {
         label: "重试",
@@ -211,10 +238,40 @@ function AppContent() {
     }
   }, [saveError, retrySave, showToast]);
 
+  useEffect(() => {
+    if (!settingsSaveError) return;
+    showToast("设置保存失败", "error", 0, {
+      label: "重试",
+      onClick: retrySettingsSave,
+    });
+  }, [retrySettingsSave, settingsSaveError, showToast]);
+
+  useEffect(() => {
+    if (!folderSaveError) return;
+    showToast("文件夹保存失败", "error", 0, {
+      label: "重试",
+      onClick: retryFolderSave,
+    });
+  }, [folderSaveError, retryFolderSave, showToast]);
+
+  useEffect(() => {
+    if (!templateSaveError) return;
+    showToast("模板保存失败", "error", 0, {
+      label: "重试",
+      onClick: retryTemplateSave,
+    });
+  }, [retryTemplateSave, showToast, templateSaveError]);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
   const currentNoteRef = useRef<Note | null>(null);
   const [aiUndoPreview, setAiUndoPreview] = useState<AiNoteApplyPreview | null>(null);
+
+  const handleBeforeDataReplace = useCallback(async () => {
+    editorRef.current?.flushDraft();
+    await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+    await Promise.all([saveNow(), flushSettings(), flushFolders()]);
+  }, [flushFolders, flushSettings, saveNow]);
 
   useEffect(() => {
     currentNoteRef.current = currentNote;
@@ -1046,6 +1103,7 @@ function AppContent() {
         settings={settings}
         onUpdate={updateSettings}
         onInsertTemplate={handleInsertTemplate}
+        onBeforeDataReplace={handleBeforeDataReplace}
       />
       <CommandPalette
         open={showCommandPalette}

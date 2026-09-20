@@ -10,6 +10,7 @@ export * from "./useClickOutside";
 export * from "./useDialogA11y";
 export * from "./useWelcomeNote";
 export * from "./useStorageEstimate";
+export * from "./useDebouncedPersistence";
 export * from "./useSessionTime";
 export * from "./useTypingSound";
 export * from "./useEyeCare";

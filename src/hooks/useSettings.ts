@@ -4,6 +4,8 @@ import { parseAiUiTheme } from "@utils/aiUiTheme";
 import type { AiProviderId, AiUiStyle, AiUiThemePackage } from "@types";
 import type { AvatarAnimation, AvatarMode, AvatarSkin } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
+import { useDebouncedPersistence } from "./useDebouncedPersistence";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 export interface Settings {
   fontSize: "sm" | "md" | "lg" | number;
@@ -97,6 +99,21 @@ const DEFAULT_SETTINGS: Settings = {
 
 const SETTINGS_KEY = "settings";
 
+function normalizeSettings(stored?: Partial<Settings>, pending: Partial<Settings> = {}): Settings {
+  const next = { ...DEFAULT_SETTINGS, ...stored, ...pending };
+  if (next.aiCustomUiTheme) {
+    try {
+      next.aiCustomUiTheme = parseAiUiTheme(next.aiCustomUiTheme);
+    } catch {
+      next.aiCustomUiTheme = null;
+      if (next.aiUiStyle === "custom") next.aiUiStyle = "companion";
+    }
+  } else if (next.aiUiStyle === "custom") {
+    next.aiUiStyle = "companion";
+  }
+  return next;
+}
+
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
@@ -105,18 +122,7 @@ export function useSettings() {
   useEffect(() => {
     idbGetSetting<Settings>(SETTINGS_KEY)
       .then(stored => {
-        const next = { ...DEFAULT_SETTINGS, ...stored, ...pendingUpdatesRef.current };
-        if (next.aiCustomUiTheme) {
-          try {
-            next.aiCustomUiTheme = parseAiUiTheme(next.aiCustomUiTheme);
-          } catch {
-            next.aiCustomUiTheme = null;
-            if (next.aiUiStyle === "custom") next.aiUiStyle = "companion";
-          }
-        } else if (next.aiUiStyle === "custom") {
-          next.aiUiStyle = "companion";
-        }
-        setSettings(next);
+        setSettings(normalizeSettings(stored, pendingUpdatesRef.current));
       })
       .catch(() => {})
       .finally(() => setHydrated(true));
@@ -130,15 +136,36 @@ export function useSettings() {
     [hydrated]
   );
 
-  useEffect(() => {
-    if (!hydrated) return;
-    idbSetSetting(SETTINGS_KEY, settings).catch(err => {
-      console.error("Failed to save settings:", err);
-    });
-  }, [hydrated, settings]);
+  const persistence = useDebouncedPersistence(
+    settings,
+    async value => {
+      await idbSetSetting(SETTINGS_KEY, value);
+      publishCrossTabChange("settings");
+    },
+    hydrated,
+    300
+  );
+  const skipNextSettingsPersist = persistence.skipNextPersist;
+
+  useEffect(
+    () =>
+      subscribeCrossTabChange("settings", () => {
+        void idbGetSetting<Settings>(SETTINGS_KEY).then(stored => {
+          if (!stored) return;
+          skipNextSettingsPersist();
+          setSettings(normalizeSettings(stored));
+        });
+      }),
+    [skipNextSettingsPersist]
+  );
 
   return {
     settings,
     updateSettings,
+    saveStatus: persistence.status,
+    saveError: persistence.error,
+    retrySave: persistence.retry,
+    clearSaveError: persistence.clearError,
+    flush: persistence.flush,
   };
 }

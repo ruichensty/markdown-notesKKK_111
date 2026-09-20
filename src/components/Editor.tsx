@@ -42,6 +42,7 @@ export interface EditorHandle {
   scrollToLine: (line: number) => void;
   getSnapshot: () => AiEditorSnapshot;
   applyContent: (nextContent: string, selectionStart?: number, selectionEnd?: number) => void;
+  flushDraft: () => void;
 }
 
 const FONT_SIZE_MAP: Record<string, number> = {
@@ -105,16 +106,44 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const [switching, setSwitching] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const noteIdRef = useRef(note.id);
+  const titleRef = useRef(title);
   const contentRef = useRef(content);
+  const dirtyRef = useRef(false);
+  const onUpdateRef = useRef(onUpdate);
   const { playKey, playEnter, playBackspace } = useTypingSound(typingSound);
 
   useEffect(() => {
-    contentRef.current = content;
-  }, [content]);
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
+  const setDraftTitle = useCallback((nextTitle: string) => {
+    titleRef.current = nextTitle;
+    dirtyRef.current = true;
+    setTitle(nextTitle);
+  }, []);
+
+  const setDraftContent = useCallback((nextContent: string) => {
+    contentRef.current = nextContent;
+    dirtyRef.current = true;
+    setContent(nextContent);
+  }, []);
+
+  const flushDraft = useCallback(() => {
+    if (!dirtyRef.current) return;
+    dirtyRef.current = false;
+    onUpdateRef.current(noteIdRef.current, {
+      title: titleRef.current,
+      content: contentRef.current,
+    });
+  }, []);
 
   useEffect(() => {
     if (noteIdRef.current !== note.id) {
+      flushDraft();
       noteIdRef.current = note.id;
+      titleRef.current = note.title;
+      contentRef.current = note.content;
+      dirtyRef.current = false;
       setSwitching(true);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -123,8 +152,18 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           requestAnimationFrame(() => setSwitching(false));
         });
       });
+    } else if (
+      !dirtyRef.current &&
+      (titleRef.current !== note.title || contentRef.current !== note.content)
+    ) {
+      titleRef.current = note.title;
+      contentRef.current = note.content;
+      setTitle(note.title);
+      setContent(note.content);
     }
-  }, [note.id, note.title, note.content]);
+  }, [flushDraft, note.id, note.title, note.content]);
+
+  useEffect(() => () => flushDraft(), [flushDraft]);
 
   const debouncedTitle = useDebounce(title, 500);
   const debouncedContent = useDebounce(content, 300);
@@ -152,8 +191,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       selectionStart = nextContent.length,
       selectionEnd = selectionStart
     ) => {
-      contentRef.current = nextContent;
-      setContent(nextContent);
+      setDraftContent(nextContent);
       window.setTimeout(() => {
         const ta = textareaRef.current;
         if (!ta) return;
@@ -162,16 +200,18 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         ta.selectionEnd = Math.min(selectionEnd, nextContent.length);
       }, 0);
     },
+    flushDraft,
   }));
 
   useEffect(() => {
-    if (debouncedTitle !== note.title || debouncedContent !== note.content) {
-      onUpdate(note.id, {
-        title: debouncedTitle,
-        content: debouncedContent,
-      });
+    if (
+      dirtyRef.current &&
+      debouncedTitle === titleRef.current &&
+      debouncedContent === contentRef.current
+    ) {
+      flushDraft();
     }
-  }, [debouncedTitle, debouncedContent, note.id, note.title, note.content, onUpdate]);
+  }, [debouncedTitle, debouncedContent, flushDraft]);
 
   const scrollToCursorCenter = useCallback(() => {
     if (!typewriterMode) return;
@@ -182,26 +222,36 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     ta.scrollTop = linesBefore * lineH - ta.clientHeight / 2;
   }, [typewriterMode]);
 
-  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-  }, []);
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setDraftTitle(e.target.value);
+    },
+    [setDraftTitle]
+  );
 
-  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-  }, []);
+  const handleContentChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setDraftContent(e.target.value);
+    },
+    [setDraftContent]
+  );
 
-  const insertImageMarker = useCallback((marker: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const currentContent = contentRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newContent = currentContent.substring(0, start) + marker + currentContent.substring(end);
-    setContent(newContent);
-    setTimeout(() => {
-      textarea.selectionStart = textarea.selectionEnd = start + marker.length;
-    }, 0);
-  }, []);
+  const insertImageMarker = useCallback(
+    (marker: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const currentContent = contentRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newContent =
+        currentContent.substring(0, start) + marker + currentContent.substring(end);
+      setDraftContent(newContent);
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + marker.length;
+      }, 0);
+    },
+    [setDraftContent]
+  );
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -267,27 +317,33 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [insertImageMarker, onAttachmentAdd, note.id]
   );
 
-  const wrapSelection = useCallback((before: string, after: string, placeholder: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    insertAtCursor(textarea, contentRef.current, setContent, before, after, placeholder);
-  }, []);
+  const wrapSelection = useCallback(
+    (before: string, after: string, placeholder: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      insertAtCursor(textarea, contentRef.current, setDraftContent, before, after, placeholder);
+    },
+    [setDraftContent]
+  );
 
-  const insertBlockPrefix = useCallback((prefix: string, placeholder: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const content = contentRef.current;
-    const start = textarea.selectionStart;
-    const atLineStart = start === 0 || content.charAt(start - 1) === "\n";
-    insertAtCursor(
-      textarea,
-      content,
-      setContent,
-      atLineStart ? prefix : "\n" + prefix,
-      "",
-      placeholder
-    );
-  }, []);
+  const insertBlockPrefix = useCallback(
+    (prefix: string, placeholder: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const content = contentRef.current;
+      const start = textarea.selectionStart;
+      const atLineStart = start === 0 || content.charAt(start - 1) === "\n";
+      insertAtCursor(
+        textarea,
+        content,
+        setDraftContent,
+        atLineStart ? prefix : "\n" + prefix,
+        "",
+        placeholder
+      );
+    },
+    [setDraftContent]
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -316,7 +372,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             const hasContent = line.length > markerText.length;
             if (!hasContent) {
               const newText = content.substring(0, lineStart) + content.substring(start);
-              setContent(newText);
+              setDraftContent(newText);
               setTimeout(() => {
                 textarea.selectionStart = textarea.selectionEnd = lineStart;
               }, 0);
@@ -325,7 +381,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             const nextMarker = bullet ? `${bullet} ` : num ? `${Number(num) + 1}${delim} ` : "> ";
             const insertText = `\n${indent}${nextMarker}`;
             const newText = content.substring(0, start) + insertText + content.substring(end);
-            setContent(newText);
+            setDraftContent(newText);
             setTimeout(() => {
               textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
             }, 0);
@@ -339,7 +395,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const newValue = content.substring(0, start) + "  " + content.substring(end);
-        setContent(newValue);
+        setDraftContent(newValue);
         setTimeout(() => {
           textarea.selectionStart = textarea.selectionEnd = start + 2;
         }, 0);
@@ -355,7 +411,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
-        onUpdate(note.id, { title, content });
+        flushDraft();
         requestAnimationFrame(() => onSave?.());
         return;
       }
@@ -399,7 +455,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             const selected = content.substring(start, end);
             const newText =
               content.substring(0, start) + e.key + selected + pair + content.substring(end);
-            setContent(newText);
+            setDraftContent(newText);
             setTimeout(() => {
               textarea.selectionStart = start + 1;
               textarea.selectionEnd = start + 1 + selected.length;
@@ -407,7 +463,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           } else {
             e.preventDefault();
             const newText = content.substring(0, start) + e.key + pair + content.substring(end);
-            setContent(newText);
+            setDraftContent(newText);
             setTimeout(() => {
               textarea.selectionStart = textarea.selectionEnd = start + 1;
             }, 0);
@@ -424,10 +480,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       playKey,
       playEnter,
       playBackspace,
-      note.id,
-      onUpdate,
-      title,
       onSave,
+      flushDraft,
+      setDraftContent,
     ]
   );
 
@@ -469,59 +524,65 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     const content = contentRef.current;
     const start = textarea.selectionStart;
     const newText = content.substring(0, start) + "  \n" + content.substring(start);
-    setContent(newText);
+    setDraftContent(newText);
     setTimeout(() => {
       textarea.focus();
       textarea.selectionStart = textarea.selectionEnd = start + 3;
     }, 0);
-  }, []);
+  }, [setDraftContent]);
 
-  const handleFontSize = useCallback((size: number) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const content = contentRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.substring(start, end);
-    const tag = `<span style="font-size:${size}px">`;
-    const closeTag = "</span>";
-    if (selected) {
-      const newText =
-        content.substring(0, start) + tag + selected + closeTag + content.substring(end);
-      setContent(newText);
-    } else {
-      const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
-      setContent(newText);
-      setTimeout(() => {
-        textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd = start + tag.length;
-      }, 0);
-    }
-  }, []);
+  const handleFontSize = useCallback(
+    (size: number) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const content = contentRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = content.substring(start, end);
+      const tag = `<span style="font-size:${size}px">`;
+      const closeTag = "</span>";
+      if (selected) {
+        const newText =
+          content.substring(0, start) + tag + selected + closeTag + content.substring(end);
+        setDraftContent(newText);
+      } else {
+        const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
+        setDraftContent(newText);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+        }, 0);
+      }
+    },
+    [setDraftContent]
+  );
 
-  const handleColor = useCallback((color: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const content = contentRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.substring(start, end);
-    setTextColor(color);
-    const tag = `<span style="color:${color}">`;
-    const closeTag = "</span>";
-    if (selected) {
-      const newText =
-        content.substring(0, start) + tag + selected + closeTag + content.substring(end);
-      setContent(newText);
-    } else {
-      const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
-      setContent(newText);
-      setTimeout(() => {
-        textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd = start + tag.length;
-      }, 0);
-    }
-  }, []);
+  const handleColor = useCallback(
+    (color: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const content = contentRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = content.substring(start, end);
+      setTextColor(color);
+      const tag = `<span style="color:${color}">`;
+      const closeTag = "</span>";
+      if (selected) {
+        const newText =
+          content.substring(0, start) + tag + selected + closeTag + content.substring(end);
+        setDraftContent(newText);
+      } else {
+        const newText = content.substring(0, start) + tag + closeTag + content.substring(end);
+        setDraftContent(newText);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+        }, 0);
+      }
+    },
+    [setDraftContent]
+  );
 
   const resolvedFontSize =
     typeof fontSize === "number" ? fontSize : (FONT_SIZE_MAP[fontSize] ?? 14);
@@ -580,7 +641,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       {showSearch && (
         <SearchReplace
           content={content}
-          onContentChange={setContent}
+          onContentChange={setDraftContent}
           textareaRef={textareaRef}
           onClose={() => setShowSearch(false)}
           showReplace={searchReplaceMode}

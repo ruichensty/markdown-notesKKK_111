@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiChat, AiChatMessage, AiNoteContext } from "@types";
 import { idbDeleteAiChat, idbGetAllAiChats, idbSaveAiChat } from "@utils/indexedDBStorage";
 import { AiClientError, buildContextMessages, streamAiCompletion } from "@utils/aiClient";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 export interface AiChatConfig {
   baseUrl: string;
@@ -24,6 +25,7 @@ export function useAiChat(config: AiChatConfig) {
   const configRef = useRef(config);
   const chatsRef = useRef<AiChat[]>([]);
   const persistTimersRef = useRef(new Map<string, number>());
+  const remoteRefreshPendingRef = useRef(false);
 
   useEffect(() => {
     configRef.current = config;
@@ -36,7 +38,10 @@ export function useAiChat(config: AiChatConfig) {
       persistTimersRef.current.delete(chatId);
     }
     const chat = chatsRef.current.find(item => item.id === chatId);
-    if (chat) await idbSaveAiChat(chat);
+    if (chat) {
+      await idbSaveAiChat(chat);
+      publishCrossTabChange("ai-chats");
+    }
   }, []);
 
   const scheduleChatPersist = useCallback(
@@ -51,6 +56,15 @@ export function useAiChat(config: AiChatConfig) {
     [persistChatNow]
   );
 
+  const reloadChats = useCallback(async () => {
+    const list = await idbGetAllAiChats();
+    chatsRef.current = list;
+    setChats(list);
+    setActiveChatId(current =>
+      current && list.some(chat => chat.id === current) ? current : (list[0]?.id ?? null)
+    );
+  }, []);
+
   useEffect(() => {
     idbGetAllAiChats()
       .then(list => {
@@ -61,6 +75,18 @@ export function useAiChat(config: AiChatConfig) {
       .catch(() => {});
   }, []);
 
+  useEffect(
+    () =>
+      subscribeCrossTabChange("ai-chats", () => {
+        if (abortRef.current) {
+          remoteRefreshPendingRef.current = true;
+          return;
+        }
+        void reloadChats().catch(() => {});
+      }),
+    [reloadChats]
+  );
+
   useEffect(() => {
     const persistTimers = persistTimersRef.current;
     return () => {
@@ -68,7 +94,11 @@ export function useAiChat(config: AiChatConfig) {
       for (const [chatId, timer] of persistTimers) {
         window.clearTimeout(timer);
         const chat = chatsRef.current.find(item => item.id === chatId);
-        if (chat) void idbSaveAiChat(chat).catch(() => {});
+        if (chat) {
+          void idbSaveAiChat(chat)
+            .then(() => publishCrossTabChange("ai-chats"))
+            .catch(() => {});
+        }
       }
       persistTimers.clear();
       abortRef.current?.abort();
@@ -222,9 +252,13 @@ export function useAiChat(config: AiChatConfig) {
       } finally {
         setStreaming(false);
         abortRef.current = null;
+        if (remoteRefreshPendingRef.current) {
+          remoteRefreshPendingRef.current = false;
+          void reloadChats().catch(() => {});
+        }
       }
     },
-    [activeChatId, chats, streaming, flushDelta, updateChat]
+    [activeChatId, chats, streaming, flushDelta, reloadChats, updateChat]
   );
 
   const stop = useCallback(() => {
@@ -245,7 +279,9 @@ export function useAiChat(config: AiChatConfig) {
       chatsRef.current = next;
       setChats(next);
       if (activeChatId === id) setActiveChatId(next[0]?.id ?? null);
-      void idbDeleteAiChat(id).catch(() => {});
+      void idbDeleteAiChat(id)
+        .then(() => publishCrossTabChange("ai-chats"))
+        .catch(() => {});
     },
     [activeChatId]
   );

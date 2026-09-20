@@ -4,7 +4,14 @@ import type { AiProviderId } from "@types";
 import { AI_PROVIDER_PRESETS, getPreset } from "@utils/aiClient";
 import { TTS_API_PRESETS, getTtsPreset } from "@utils/ttsApi";
 import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
-import { createBackup, restoreBackup } from "@utils/backup";
+import {
+  BackupPasswordRequiredError,
+  createBackup,
+  inspectBackup,
+  restoreBackup,
+  type BackupInspection,
+  type BackupResult,
+} from "@utils/backup";
 import { validateAvatarImage } from "@utils/avatarImage";
 import { createAiUiThemeTemplateBlob, readAiUiThemeFile } from "@utils/aiUiTheme";
 import { idbUpdateSettingsAndAvatarFile } from "@utils/indexedDBStorage";
@@ -69,6 +76,7 @@ interface SettingsPanelProps {
   settings: Settings;
   onUpdate: (updates: Partial<Settings>) => void;
   onInsertTemplate?: (templateId: string) => void;
+  onBeforeDataReplace?: () => Promise<void>;
 }
 
 function SettingsPanelBase({
@@ -77,6 +85,7 @@ function SettingsPanelBase({
   settings,
   onUpdate,
   onInsertTemplate,
+  onBeforeDataReplace,
 }: SettingsPanelProps) {
   const [visible, setVisible] = useState(false);
   const [rendered, setRendered] = useState(false);
@@ -88,6 +97,12 @@ function SettingsPanelBase({
     null
   );
   const [pendingBackupFile, setPendingBackupFile] = useState<File | null>(null);
+  const [pendingBackupInspection, setPendingBackupInspection] = useState<BackupInspection | null>(
+    null
+  );
+  const [backupPassword, setBackupPassword] = useState("");
+  const [inspectedBackupPassword, setInspectedBackupPassword] = useState("");
+  const [showBackupPassword, setShowBackupPassword] = useState(false);
   const [showBackupConfirm, setShowBackupConfirm] = useState(false);
   const [avatarImageBusy, setAvatarImageBusy] = useState(false);
   const [avatarImageMessage, setAvatarImageMessage] = useState<{
@@ -110,6 +125,12 @@ function SettingsPanelBase({
       setRendered(true);
     } else {
       setVisible(false);
+      setBackupPassword("");
+      setInspectedBackupPassword("");
+      setShowBackupPassword(false);
+      setPendingBackupFile(null);
+      setPendingBackupInspection(null);
+      setShowBackupConfirm(false);
     }
   }
 
@@ -150,27 +171,31 @@ function SettingsPanelBase({
     }
   };
 
+  const downloadBackup = (result: BackupResult) => {
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = result.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportBackup = async () => {
     if (backupBusy) return;
     setBackupBusy(true);
     setBackupMessage(null);
     try {
-      const result = await createBackup();
+      const result = await createBackup(backupPassword || undefined);
       const sizeLabel =
         result.byteSize > 1024 * 1024
           ? `${(result.byteSize / 1024 / 1024).toFixed(1)} MB`
           : `${Math.max(1, Math.round(result.byteSize / 1024))} KB`;
-      const url = URL.createObjectURL(result.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = result.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      downloadBackup(result);
       setBackupMessage({
         kind: "ok",
-        text: `已导出 ${result.noteCount} 篇笔记、${result.fileCount} 个附件（${sizeLabel}）`,
+        text: `已导出${result.encrypted ? "加密" : ""}备份：${result.noteCount} 篇笔记、${result.fileCount} 个附件（${sizeLabel}）`,
       });
     } catch (error) {
       setBackupMessage({
@@ -182,11 +207,38 @@ function SettingsPanelBase({
     }
   };
 
+  const inspectPendingBackup = async (file = pendingBackupFile) => {
+    if (!file || backupBusy) return;
+    setBackupBusy(true);
+    setBackupMessage(null);
+    setPendingBackupInspection(null);
+    try {
+      const inspection = await inspectBackup(file, backupPassword || undefined);
+      setPendingBackupInspection(inspection);
+      setInspectedBackupPassword(inspection.encrypted ? backupPassword : "");
+      setShowBackupConfirm(true);
+    } catch (error) {
+      if (error instanceof BackupPasswordRequiredError) {
+        setBackupMessage({ kind: "error", text: "此备份已加密，请输入密码后点击“检查备份”" });
+      } else {
+        setBackupMessage({
+          kind: "error",
+          text: `无法读取备份：${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
   const handleImportBackup = async () => {
-    if (!pendingBackupFile || backupBusy) return;
+    if (!pendingBackupFile || !pendingBackupInspection || backupBusy) return;
     setBackupBusy(true);
     try {
-      await restoreBackup(pendingBackupFile);
+      await onBeforeDataReplace?.();
+      const recovery = await createBackup(inspectedBackupPassword || backupPassword || undefined);
+      downloadBackup(recovery);
+      await restoreBackup(pendingBackupFile, inspectedBackupPassword || undefined);
       window.location.reload();
     } catch (error) {
       setBackupMessage({
@@ -194,7 +246,8 @@ function SettingsPanelBase({
         text: `导入失败：${error instanceof Error ? error.message : String(error)}`,
       });
       setShowBackupConfirm(false);
-      setPendingBackupFile(null);
+      setPendingBackupInspection(null);
+      setInspectedBackupPassword("");
       setBackupBusy(false);
     }
   };
@@ -1321,8 +1374,34 @@ function SettingsPanelBase({
             <div className="space-y-3">
               <p className="text-[10px] text-muted-foreground leading-relaxed">
                 所有数据保存在当前浏览器中。切换浏览器或设备时，可导出备份文件再导入恢复（笔记、文件夹、附件、设置、模板、AI
-                聊天记录全量迁移）。备份包含 API Key，请妥善保管。
+                聊天记录全量迁移）。备份包含 API Key，建议设置密码加密。
               </p>
+              <div>
+                <label className="block text-[10px] text-muted-foreground mb-1">
+                  备份密码（可选，至少 8 个字符）
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type={showBackupPassword ? "text" : "password"}
+                    className="settings-ai-input flex-1"
+                    value={backupPassword}
+                    onChange={event => setBackupPassword(event.target.value)}
+                    placeholder="留空则导出普通 JSON"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="settings-backup-visibility"
+                    onClick={() => setShowBackupPassword(value => !value)}
+                    aria-label={showBackupPassword ? "隐藏备份密码" : "显示备份密码"}
+                  >
+                    {showBackupPassword ? "隐藏" : "显示"}
+                  </button>
+                </div>
+                <p className="mt-1 text-[9px] text-muted-foreground/70">
+                  密码不会保存；遗忘后无法恢复加密备份
+                </p>
+              </div>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1330,7 +1409,7 @@ function SettingsPanelBase({
                   onClick={() => void handleExportBackup()}
                   disabled={backupBusy || avatarImageBusy}
                 >
-                  {backupBusy ? "处理中…" : "导出全部数据"}
+                  {backupBusy ? "处理中…" : backupPassword ? "导出加密备份" : "导出普通备份"}
                 </button>
                 <button
                   type="button"
@@ -1350,10 +1429,40 @@ function SettingsPanelBase({
                     e.target.value = "";
                     if (!file) return;
                     setPendingBackupFile(file);
-                    setShowBackupConfirm(true);
+                    setPendingBackupInspection(null);
+                    setInspectedBackupPassword("");
+                    void inspectPendingBackup(file);
                   }}
                 />
               </div>
+              {pendingBackupFile && !pendingBackupInspection && (
+                <button
+                  type="button"
+                  className="settings-backup-inspect"
+                  onClick={() => void inspectPendingBackup()}
+                  disabled={backupBusy}
+                >
+                  {backupBusy ? "正在检查…" : `检查备份「${pendingBackupFile.name}」`}
+                </button>
+              )}
+              {pendingBackupInspection && (
+                <div className="settings-backup-summary" role="status">
+                  <div>
+                    <strong>{pendingBackupInspection.encrypted ? "加密备份" : "普通备份"}</strong>
+                    <span>
+                      {new Date(pendingBackupInspection.exportedAt).toLocaleString("zh-CN")}
+                    </span>
+                  </div>
+                  <div className="settings-backup-summary-grid">
+                    <span>{pendingBackupInspection.noteCount} 篇笔记</span>
+                    <span>{pendingBackupInspection.folderCount} 个文件夹</span>
+                    <span>{pendingBackupInspection.fileCount} 个附件</span>
+                    <span>{pendingBackupInspection.templateCount} 个模板</span>
+                    <span>{pendingBackupInspection.aiChatCount} 个 AI 会话</span>
+                    <span>{(pendingBackupInspection.byteSize / 1024 / 1024).toFixed(2)} MB</span>
+                  </div>
+                </div>
+              )}
               {backupMessage && (
                 <p
                   className={`text-[10px] leading-relaxed ${
@@ -1373,13 +1482,15 @@ function SettingsPanelBase({
       </div>
       {showBackupConfirm && pendingBackupFile && (
         <ConfirmDialog
-          message={`将清空当前浏览器中的全部数据（笔记、附件、设置、AI 聊天记录），并用备份文件「${pendingBackupFile.name}」覆盖。此操作不可撤销，确定继续吗？`}
+          message={`将用「${pendingBackupFile.name}」中的 ${pendingBackupInspection?.noteCount ?? 0} 篇笔记、${pendingBackupInspection?.fileCount ?? 0} 个附件覆盖当前数据。导入前会自动下载当前数据的回滚备份，确定继续吗？`}
           confirmLabel="覆盖导入"
           cancelLabel="取消"
           onConfirm={() => void handleImportBackup()}
           onCancel={() => {
             setShowBackupConfirm(false);
             setPendingBackupFile(null);
+            setPendingBackupInspection(null);
+            setInspectedBackupPassword("");
           }}
         />
       )}

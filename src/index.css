@@ -2954,6 +2954,71 @@
   cursor: not-allowed;
 }
 
+.settings-backup-visibility {
+  min-width: 48px;
+  padding: 0 10px;
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 10px;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+}
+
+.settings-backup-visibility:hover {
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--foreground));
+}
+
+.settings-backup-inspect {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px dashed hsl(var(--primary) / 0.36);
+  border-radius: 10px;
+  background: hsl(var(--primary) / 0.05);
+  color: hsl(var(--primary));
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-backup-summary {
+  padding: 10px;
+  border: 1px solid hsl(var(--primary) / 0.22);
+  border-radius: 12px;
+  background: hsl(var(--primary) / 0.05);
+}
+
+.settings-backup-summary > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-backup-summary strong {
+  color: hsl(var(--foreground));
+  font-size: 10px;
+}
+
+.settings-backup-summary > div:first-child span {
+  color: hsl(var(--muted-foreground));
+  font-size: 8px;
+}
+
+.settings-backup-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+  margin-top: 8px;
+}
+
+.settings-backup-summary-grid span {
+  color: hsl(var(--muted-foreground));
+  font-size: 9px;
+}
+
 .ai-ui--companion {
   --ai-ui-accent: #38d9ff;
   --ai-ui-accent-2: #8b7cff;

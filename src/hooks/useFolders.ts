@@ -3,6 +3,8 @@ import type { Folder } from "@types";
 import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
 import { getAllDataCache } from "@utils/storage";
 import { buildFolderTree, collectFolderSubtreeIds, type FolderNodeData } from "@utils/folderTree";
+import { useDebouncedPersistence } from "./useDebouncedPersistence";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>(() => getAllDataCache()?.folders ?? []);
@@ -21,15 +23,27 @@ export function useFolders() {
       });
   }, [loaded]);
 
-  useEffect(() => {
-    if (!loaded) return;
-    const timeoutId = window.setTimeout(() => {
-      idbSaveAllFolders(folders).catch(error => {
-        console.error("Failed to save folders:", error);
-      });
-    }, 300);
-    return () => window.clearTimeout(timeoutId);
-  }, [folders, loaded]);
+  const persistence = useDebouncedPersistence(
+    folders,
+    async value => {
+      await idbSaveAllFolders(value);
+      publishCrossTabChange("folders");
+    },
+    loaded,
+    300
+  );
+  const skipNextFolderPersist = persistence.skipNextPersist;
+
+  useEffect(
+    () =>
+      subscribeCrossTabChange("folders", () => {
+        void idbGetAllFolders().then(data => {
+          skipNextFolderPersist();
+          setFolders(data || []);
+        });
+      }),
+    [skipNextFolderPersist]
+  );
 
   const createFolder = useCallback((data: Omit<Folder, "id">): string => {
     const newFolder: Folder = {
@@ -77,5 +91,10 @@ export function useFolders() {
     deleteFolder,
     getBreadcrumbs,
     folderTree,
+    saveStatus: persistence.status,
+    saveError: persistence.error,
+    retrySave: persistence.retry,
+    clearSaveError: persistence.clearError,
+    flush: persistence.flush,
   };
 }

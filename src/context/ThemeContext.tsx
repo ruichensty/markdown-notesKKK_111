@@ -1,6 +1,15 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  type ReactNode,
+  useCallback,
+} from "react";
 import type { Theme } from "@types";
 import { loadTheme, saveTheme } from "@utils/storage";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 const THEMES: Theme[] = ["light", "dark", "black-rainbow"];
 
@@ -14,25 +23,50 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light");
+  const themeRef = useRef<Theme>("light");
+
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
 
   useEffect(() => {
     loadTheme()
-      .then(t => setThemeState(t))
+      .then(t => {
+        themeRef.current = t;
+        setThemeState(t);
+      })
       .catch(err => console.error("Failed to load theme:", err));
   }, []);
 
+  useEffect(
+    () =>
+      subscribeCrossTabChange("theme", () => {
+        void loadTheme()
+          .then(nextTheme => {
+            themeRef.current = nextTheme;
+            setThemeState(nextTheme);
+          })
+          .catch(err => console.error("Failed to sync theme:", err));
+      }),
+    []
+  );
+
   const setTheme = useCallback((newTheme: Theme) => {
+    themeRef.current = newTheme;
     setThemeState(newTheme);
-    saveTheme(newTheme).catch(err => console.error("Failed to save theme:", err));
+    saveTheme(newTheme)
+      .then(() => publishCrossTabChange("theme"))
+      .catch(err => console.error("Failed to save theme:", err));
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState(prev => {
-      const idx = THEMES.indexOf(prev);
-      const next = THEMES[(idx + 1) % THEMES.length];
-      saveTheme(next).catch(err => console.error("Failed to save theme:", err));
-      return next;
-    });
+    const idx = THEMES.indexOf(themeRef.current);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    themeRef.current = next;
+    setThemeState(next);
+    saveTheme(next)
+      .then(() => publishCrossTabChange("theme"))
+      .catch(err => console.error("Failed to save theme:", err));
   }, []);
 
   useEffect(() => {

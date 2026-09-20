@@ -5,6 +5,7 @@ import { saveSingleNote, deleteSingleNote, loadNotes, loadSingleNote } from "@ut
 import { idbDeleteFile } from "@utils/indexedDBStorage";
 import { invalidateAllDataCache } from "@utils/storage";
 import { diffNotes } from "@utils/noteDiff";
+import { subscribeCrossTabChange } from "@utils/crossTabSync";
 
 const SAVE_DEBOUNCE_MS = 300;
 const SAVE_RETRY_DELAYS_MS = [1000, 3000, 7000];
@@ -123,6 +124,14 @@ export function useNotes(selectedFolderId: string | null = null) {
         setLoaded(true);
       });
   }, [reloadNotes]);
+
+  useEffect(
+    () =>
+      subscribeCrossTabChange("notes", () => {
+        saveQueueRef.current = saveQueueRef.current.catch(() => {}).then(() => reloadNotes(null));
+      }),
+    [reloadNotes]
+  );
 
   useEffect(() => {
     if (!("BroadcastChannel" in window)) return;

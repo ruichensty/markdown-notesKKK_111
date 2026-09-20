@@ -57,6 +57,10 @@ function StatusBarBase({
   const totalCount = allNotes.length;
   const storageRefreshKey = `${totalCount}:${Math.floor((currentNote?.updatedAt ?? 0) / 30000)}`;
   const storage = useStorageEstimate(storageRefreshKey);
+  const storagePercentage =
+    storage.usage !== null && storage.quota !== null && storage.quota > 0
+      ? (storage.usage / storage.quota) * 100
+      : null;
 
   const stats = useMemo(() => {
     if (!currentNote) return null;
@@ -70,9 +74,9 @@ function StatusBarBase({
   const storageLabel = useMemo(() => {
     if (!storage.supported || storage.usage === null || storage.quota === null)
       return "存储容量不可用";
-    const percentage = storage.quota > 0 ? (storage.usage / storage.quota) * 100 : 0;
-    return `存储 ${formatBytes(storage.usage)} / ${formatBytes(storage.quota)} (${percentage.toFixed(1)}%)`;
-  }, [storage.quota, storage.supported, storage.usage]);
+    const durability = storage.persisted === true ? " · 已保护" : "";
+    return `存储 ${formatBytes(storage.usage)} / ${formatBytes(storage.quota)} (${(storagePercentage ?? 0).toFixed(1)}%)${durability}`;
+  }, [storage.persisted, storage.quota, storage.supported, storage.usage, storagePercentage]);
 
   return (
     <div className="status-bar flex items-center justify-between text-[10px] text-muted-foreground">
@@ -111,7 +115,28 @@ function StatusBarBase({
         {stats && <span className="md:hidden">{stats.words.toLocaleString()} 字</span>}
       </div>
       <div className="flex items-center gap-2 status-bar-hide-mobile">
-        <span title={storageLabel}>{storageLabel}</span>
+        <span
+          className={
+            storagePercentage !== null && storagePercentage >= 90
+              ? "text-destructive"
+              : storagePercentage !== null && storagePercentage >= 80
+                ? "text-amber-600 dark:text-amber-400"
+                : undefined
+          }
+          title={storageLabel}
+        >
+          {storageLabel}
+        </span>
+        {storage.persistenceSupported && storage.persisted === false && (
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => void storage.requestPersistence()}
+            title="请求浏览器将本地笔记标记为持久存储，降低空间不足时被自动清理的风险"
+          >
+            保护本地数据
+          </button>
+        )}
         <span className="text-muted-foreground/50">•</span>
         <span className="text-muted-foreground/50">v1.0.0</span>
       </div>

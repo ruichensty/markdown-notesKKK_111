@@ -1,25 +1,60 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { NoteTemplate } from "@types";
 import { BUILTIN_TEMPLATES } from "@utils/template";
 import { idbGetAllTemplates, idbSaveTemplate, idbDeleteTemplate } from "@utils/indexedDBStorage";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<NoteTemplate[]>(BUILTIN_TEMPLATES);
   const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState<Error | null>(null);
+  const retryOperationRef = useRef<(() => Promise<void>) | null>(null);
+
+  const persist = useCallback((operation: () => Promise<void>) => {
+    retryOperationRef.current = operation;
+    setSaveError(null);
+    operation()
+      .then(() => {
+        setSaveError(null);
+        publishCrossTabChange("templates");
+      })
+      .catch(reason => {
+        setSaveError(reason instanceof Error ? reason : new Error(String(reason)));
+      });
+  }, []);
+
+  const reloadTemplates = useCallback(async () => {
+    const custom = await idbGetAllTemplates();
+    setTemplates(prev => {
+      const builtins = prev.filter(template => template.isBuiltin);
+      return [...builtins, ...(custom || [])];
+    });
+  }, []);
 
   useEffect(() => {
     idbGetAllTemplates()
       .then(custom => {
-        if (custom && custom.length > 0) {
-          setTemplates(prev => {
-            const builtins = prev.filter(t => t.isBuiltin);
-            return [...builtins, ...custom];
-          });
-        }
+        setTemplates(prev => {
+          const builtins = prev.filter(template => template.isBuiltin);
+          return [...builtins, ...(custom || [])];
+        });
         setLoaded(true);
       })
-      .catch(() => setLoaded(true));
+      .catch(reason => {
+        setSaveError(reason instanceof Error ? reason : new Error(String(reason)));
+        setLoaded(true);
+      });
   }, []);
+
+  useEffect(
+    () =>
+      subscribeCrossTabChange("templates", () => {
+        void reloadTemplates().catch(reason => {
+          setSaveError(reason instanceof Error ? reason : new Error(String(reason)));
+        });
+      }),
+    [reloadTemplates]
+  );
 
   const addTemplate = useCallback(
     (template: Omit<NoteTemplate, "id" | "isBuiltin" | "createdAt" | "updatedAt">) => {
@@ -32,10 +67,10 @@ export function useTemplates() {
         updatedAt: now,
       };
       setTemplates(prev => [...prev, newTemplate]);
-      idbSaveTemplate(newTemplate).catch(() => {});
+      persist(() => idbSaveTemplate(newTemplate));
       return newTemplate;
     },
-    []
+    [persist]
   );
 
   const updateTemplate = useCallback(
@@ -45,16 +80,36 @@ export function useTemplates() {
       );
       const target = templates.find(t => t.id === id);
       if (target && !target.isBuiltin) {
-        idbSaveTemplate({ ...target, ...data, updatedAt: Date.now() }).catch(() => {});
+        const next = { ...target, ...data, updatedAt: Date.now() };
+        persist(() => idbSaveTemplate(next));
       }
     },
-    [templates]
+    [persist, templates]
   );
 
-  const deleteTemplate = useCallback((id: string) => {
-    setTemplates(prev => prev.filter(t => t.id !== id));
-    idbDeleteTemplate(id).catch(() => {});
-  }, []);
+  const deleteTemplate = useCallback(
+    (id: string) => {
+      setTemplates(prev => prev.filter(t => t.id !== id));
+      persist(() => idbDeleteTemplate(id));
+    },
+    [persist]
+  );
 
-  return { templates, loaded, addTemplate, updateTemplate, deleteTemplate };
+  const retrySave = useCallback(() => {
+    const operation = retryOperationRef.current;
+    if (operation) persist(operation);
+  }, [persist]);
+
+  const clearSaveError = useCallback(() => setSaveError(null), []);
+
+  return {
+    templates,
+    loaded,
+    addTemplate,
+    updateTemplate,
+    deleteTemplate,
+    saveError,
+    retrySave,
+    clearSaveError,
+  };
 }
