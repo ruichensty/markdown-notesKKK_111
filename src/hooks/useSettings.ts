@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
-import type { AiProviderId } from "@types";
+import { parseAiUiTheme } from "@utils/aiUiTheme";
+import type { AiProviderId, AiUiStyle, AiUiThemePackage } from "@types";
 import type { AvatarAnimation, AvatarMode, AvatarSkin } from "@types";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
@@ -30,6 +31,8 @@ export interface Settings {
   aiAvatarTips: boolean;
   aiAvatarTipDismissed: boolean;
   aiAvatarAnimation: AvatarAnimation;
+  aiUiStyle: AiUiStyle;
+  aiCustomUiTheme: AiUiThemePackage | null;
   aiWidgetPos: { x: number; y: number } | null;
   aiProvider: AiProviderId;
   aiApiBaseUrl: string;
@@ -73,6 +76,8 @@ const DEFAULT_SETTINGS: Settings = {
   aiAvatarTips: true,
   aiAvatarTipDismissed: false,
   aiAvatarAnimation: "full",
+  aiUiStyle: "companion",
+  aiCustomUiTheme: null,
   aiWidgetPos: null,
   aiProvider: "zhipu",
   aiApiBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
@@ -100,7 +105,18 @@ export function useSettings() {
   useEffect(() => {
     idbGetSetting<Settings>(SETTINGS_KEY)
       .then(stored => {
-        setSettings({ ...DEFAULT_SETTINGS, ...stored, ...pendingUpdatesRef.current });
+        const next = { ...DEFAULT_SETTINGS, ...stored, ...pendingUpdatesRef.current };
+        if (next.aiCustomUiTheme) {
+          try {
+            next.aiCustomUiTheme = parseAiUiTheme(next.aiCustomUiTheme);
+          } catch {
+            next.aiCustomUiTheme = null;
+            if (next.aiUiStyle === "custom") next.aiUiStyle = "companion";
+          }
+        } else if (next.aiUiStyle === "custom") {
+          next.aiUiStyle = "companion";
+        }
+        setSettings(next);
       })
       .catch(() => {})
       .finally(() => setHydrated(true));

@@ -20,9 +20,7 @@ const speech: SpeechController = {
   stop: vi.fn(),
 };
 
-function renderPanel(
-  overrides: Partial<React.ComponentProps<typeof AiChatPanel>> = {}
-) {
+function renderPanel(overrides: Partial<React.ComponentProps<typeof AiChatPanel>> = {}) {
   const props: React.ComponentProps<typeof AiChatPanel> = {
     anchor: { x: 900, y: 500 },
     noteTitle: "测试笔记",
@@ -31,6 +29,8 @@ function renderPanel(
     tts,
     speech,
     quickPrompts: [],
+    uiStyle: "companion",
+    themeStyle: {},
     onToggleTtsAuto: vi.fn(),
     onToggleTtsEngine: vi.fn(),
     chats: [],

@@ -905,6 +905,8 @@ function AppContent() {
           avatarTips={settings.aiAvatarTips}
           avatarTipDismissed={settings.aiAvatarTipDismissed}
           avatarAnimation={settings.aiAvatarAnimation}
+          uiStyle={settings.aiUiStyle}
+          customUiTheme={settings.aiCustomUiTheme}
           config={aiConfig}
           tts={aiTts}
           quickPrompts={aiQuickPrompts}

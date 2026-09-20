@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AiChat } from "@types";
+import type { AiChat, BuiltInAiUiStyle } from "@types";
 import type { SpeechController } from "@hooks/useSpeech";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
@@ -20,6 +20,8 @@ interface AiChatPanelProps {
   tts: TtsPanelConfig;
   speech: SpeechController;
   quickPrompts: AiQuickPrompt[];
+  uiStyle: BuiltInAiUiStyle;
+  themeStyle: React.CSSProperties;
   onToggleTtsAuto: () => void;
   onToggleTtsEngine: () => void;
   chats: AiChat[];
@@ -96,6 +98,8 @@ export function AiChatPanel(props: AiChatPanelProps) {
     tts,
     speech,
     quickPrompts,
+    uiStyle,
+    themeStyle,
     onToggleTtsAuto,
     onToggleTtsEngine,
     chats,
@@ -302,8 +306,8 @@ export function AiChatPanel(props: AiChatPanelProps) {
   return (
     <div
       id="ai-assistant-dialog"
-      className="ai-chat-panel"
-      style={style}
+      className={`ai-chat-panel ai-ui--${uiStyle}`}
+      style={{ ...themeStyle, ...style }}
       role="dialog"
       aria-labelledby="ai-chat-title"
     >

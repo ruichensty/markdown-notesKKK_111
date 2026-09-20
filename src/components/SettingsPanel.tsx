@@ -6,6 +6,7 @@ import { TTS_API_PRESETS, getTtsPreset } from "@utils/ttsApi";
 import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
 import { createBackup, restoreBackup } from "@utils/backup";
 import { validateAvatarImage } from "@utils/avatarImage";
+import { createAiUiThemeTemplateBlob, readAiUiThemeFile } from "@utils/aiUiTheme";
 import { idbUpdateSettingsAndAvatarFile } from "@utils/indexedDBStorage";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { TemplateManagement } from "./TemplateManagement";
@@ -13,7 +14,7 @@ import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
 import { useDialogA11y } from "@hooks";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
-import type { AvatarMode, AvatarSkin } from "@types";
+import type { AvatarMode, AvatarSkin, BuiltInAiUiStyle } from "@types";
 
 const HOME_LAYOUTS = [
   { id: "quotes", name: "名言", desc: "随机金句 · 沉浸起笔" },
@@ -34,6 +35,32 @@ const AI_SKINS: { id: AvatarSkin; name: string; colors: [string, string] }[] = [
   { id: "aurora", name: "极光", colors: ["#38d9ff", "#8b7cff"] },
   { id: "peach", name: "蜜桃", colors: ["#ff9f8f", "#ffcf70"] },
   { id: "midnight", name: "午夜", colors: ["#56d6b5", "#172b4d"] },
+];
+
+const AI_UI_STYLES: {
+  id: BuiltInAiUiStyle;
+  name: string;
+  desc: string;
+  colors: [string, string];
+}[] = [
+  {
+    id: "companion",
+    name: "数字伙伴",
+    desc: "精致光感 · 丰富状态",
+    colors: ["#38d9ff", "#8b7cff"],
+  },
+  {
+    id: "pet",
+    name: "桌面萌宠",
+    desc: "柔软活泼 · 温暖陪伴",
+    colors: ["#ff9f8f", "#ffcf70"],
+  },
+  {
+    id: "minimal",
+    name: "极简工具",
+    desc: "克制清晰 · 低干扰",
+    colors: ["#334155", "#94a3b8"],
+  },
 ];
 
 interface SettingsPanelProps {
@@ -67,8 +94,13 @@ function SettingsPanelBase({
     kind: "ok" | "error";
     text: string;
   } | null>(null);
+  const [aiUiThemeMessage, setAiUiThemeMessage] = useState<{
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const avatarImageInputRef = useRef<HTMLInputElement>(null);
+  const aiUiThemeInputRef = useRef<HTMLInputElement>(null);
   const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
 
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -228,6 +260,40 @@ function SettingsPanelBase({
     } finally {
       setAvatarImageBusy(false);
     }
+  };
+
+  const handleAiUiThemeImport = async (file: File) => {
+    setAiUiThemeMessage(null);
+    try {
+      const theme = await readAiUiThemeFile(file);
+      onUpdate({ aiCustomUiTheme: theme, aiUiStyle: "custom" });
+      setAiUiThemeMessage({ kind: "ok", text: `已应用主题「${theme.name}」` });
+    } catch (error) {
+      setAiUiThemeMessage({
+        kind: "error",
+        text: error instanceof Error ? error.message : "主题导入失败",
+      });
+    }
+  };
+
+  const handleAiUiThemeTemplateExport = () => {
+    const url = URL.createObjectURL(createAiUiThemeTemplateBlob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "markdown-notes-ai-ui-template.aiui.json";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setAiUiThemeMessage({ kind: "ok", text: "示例主题已导出，可编辑后重新导入" });
+  };
+
+  const handleAiUiThemeRemove = () => {
+    onUpdate({
+      aiCustomUiTheme: null,
+      aiUiStyle: settings.aiUiStyle === "custom" ? "companion" : settings.aiUiStyle,
+    });
+    setAiUiThemeMessage({ kind: "ok", text: "已移除自定义主题" });
   };
 
   if (!rendered) return null;
@@ -591,6 +657,123 @@ function SettingsPanelBase({
                     className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${settings.aiAssistant ? "translate-x-4" : "translate-x-0"}`}
                   />
                 </button>
+              </div>
+
+              <div>
+                <div className="flex items-end justify-between gap-3 mb-2">
+                  <div>
+                    <label className="block text-[10px] text-muted-foreground">
+                      机器人 UI 风格
+                    </label>
+                    <p className="text-[9px] text-muted-foreground/70 mt-0.5">
+                      形象与界面风格可自由组合
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="settings-ai-ui-template-link"
+                    onClick={handleAiUiThemeTemplateExport}
+                  >
+                    导出制作模板
+                  </button>
+                </div>
+                <div className="settings-ai-ui-grid" role="group" aria-label="机器人 UI 风格">
+                  {AI_UI_STYLES.map(style => {
+                    const active = settings.aiUiStyle === style.id;
+                    return (
+                      <button
+                        key={style.id}
+                        type="button"
+                        className={`settings-ai-ui-card settings-ai-ui-card--${style.id} ${active ? "settings-ai-ui-card--active" : ""}`}
+                        onClick={() => onUpdate({ aiUiStyle: style.id })}
+                        aria-pressed={active}
+                      >
+                        <span className="settings-ai-ui-preview" aria-hidden="true">
+                          <span
+                            className="settings-ai-ui-preview-orb"
+                            style={{
+                              background: `linear-gradient(135deg, ${style.colors[0]}, ${style.colors[1]})`,
+                            }}
+                          />
+                          <span className="settings-ai-ui-preview-panel">
+                            <span />
+                            <span />
+                          </span>
+                        </span>
+                        <span className="settings-ai-ui-name">{style.name}</span>
+                        <span className="settings-ai-ui-desc">{style.desc}</span>
+                      </button>
+                    );
+                  })}
+                  {settings.aiCustomUiTheme && (
+                    <button
+                      type="button"
+                      className={`settings-ai-ui-card settings-ai-ui-card--custom ${settings.aiUiStyle === "custom" ? "settings-ai-ui-card--active" : ""}`}
+                      onClick={() => onUpdate({ aiUiStyle: "custom" })}
+                      aria-pressed={settings.aiUiStyle === "custom"}
+                    >
+                      <span
+                        className="settings-ai-ui-preview settings-ai-ui-preview--custom"
+                        style={{
+                          background: `linear-gradient(135deg, ${settings.aiCustomUiTheme.tokens.surface ?? "#f8fafc"}, ${settings.aiCustomUiTheme.tokens.accent ?? "#38d9ff"})`,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <span className="settings-ai-ui-preview-orb" />
+                        <span className="settings-ai-ui-preview-panel">
+                          <span />
+                          <span />
+                        </span>
+                      </span>
+                      <span className="settings-ai-ui-name">{settings.aiCustomUiTheme.name}</span>
+                      <span className="settings-ai-ui-desc">
+                        {settings.aiCustomUiTheme.author
+                          ? `作者 · ${settings.aiCustomUiTheme.author}`
+                          : "导入的自定义主题"}
+                      </span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={aiUiThemeInputRef}
+                  type="file"
+                  accept="application/json,.json,.aiui.json"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void handleAiUiThemeImport(file);
+                  }}
+                />
+                <div className="settings-ai-ui-actions">
+                  <button
+                    type="button"
+                    className="settings-ai-ui-import"
+                    onClick={() => aiUiThemeInputRef.current?.click()}
+                  >
+                    {settings.aiCustomUiTheme ? "替换主题文件" : "导入 .aiui.json"}
+                  </button>
+                  {settings.aiCustomUiTheme && (
+                    <button
+                      type="button"
+                      className="settings-ai-ui-remove"
+                      onClick={handleAiUiThemeRemove}
+                    >
+                      移除
+                    </button>
+                  )}
+                </div>
+                <p className="settings-ai-ui-security">
+                  安全主题只允许颜色、圆角、阴影、模糊、密度和动画参数，不执行代码
+                </p>
+                {aiUiThemeMessage && (
+                  <p
+                    className={`settings-avatar-upload-message settings-avatar-upload-message--${aiUiThemeMessage.kind}`}
+                    role="status"
+                  >
+                    {aiUiThemeMessage.text}
+                  </p>
+                )}
               </div>
 
               <div>

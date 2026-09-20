@@ -4,6 +4,8 @@ import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
 import type { AvatarAnimation, AvatarMode, AvatarSkin, AvatarState } from "@types";
+import type { AiUiStyle, AiUiThemePackage } from "@types";
+import { getAiUiBaseStyle, getAiUiThemeVariables } from "@utils/aiUiTheme";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
 const BOT_SIZE = 56;
@@ -21,6 +23,8 @@ export interface AiAssistantWidgetProps {
   avatarTips: boolean;
   avatarTipDismissed: boolean;
   avatarAnimation: AvatarAnimation;
+  uiStyle: AiUiStyle;
+  customUiTheme: AiUiThemePackage | null;
   config: { baseUrl: string; apiKey: string; model: string };
   tts: TtsPanelConfig;
   quickPrompts: AiQuickPrompt[];
@@ -62,6 +66,8 @@ export function AiAssistantWidget({
   avatarTips,
   avatarTipDismissed,
   avatarAnimation,
+  uiStyle,
+  customUiTheme,
   config,
   tts,
   quickPrompts,
@@ -92,6 +98,8 @@ export function AiAssistantWidget({
 
   const chat = useAiChat(config);
   const speech = useSpeech();
+  const resolvedUiStyle = getAiUiBaseStyle(uiStyle, customUiTheme);
+  const uiThemeVariables = getAiUiThemeVariables(uiStyle === "custom" ? customUiTheme : null);
   const keyMissing = !config.apiKey.trim() || !config.baseUrl.trim();
   const avatarState: AvatarState = keyMissing
     ? "disabled"
@@ -257,9 +265,15 @@ export function AiAssistantWidget({
     <>
       <div
         ref={botRef}
-        className={`ai-bot ai-bot--${avatarMode} ai-bot--skin-${avatarSkin} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""} ${dragging ? "ai-bot--dragging" : ""}`}
+        className={`ai-bot ai-ui--${resolvedUiStyle} ai-bot--${avatarMode} ai-bot--skin-${avatarSkin} ai-bot--${avatarState} ${chat.streaming ? "ai-bot--thinking" : ""} ${dragging ? "ai-bot--dragging" : ""}`}
         data-animation={avatarAnimation}
-        style={{ left: botPos.x, top: botPos.y, width: BOT_SIZE, height: BOT_SIZE }}
+        style={{
+          ...uiThemeVariables,
+          left: botPos.x,
+          top: botPos.y,
+          width: BOT_SIZE,
+          height: BOT_SIZE,
+        }}
         onPointerDown={handlePointerDown}
         onPointerEnter={handleTipHoverEnter}
         onPointerLeave={handleTipHoverLeave}
@@ -281,8 +295,8 @@ export function AiAssistantWidget({
 
       {showTip && (
         <div
-          className={`ai-avatar-tip ${tipOnLeft ? "ai-avatar-tip--left" : "ai-avatar-tip--right"}`}
-          style={{ left: tipLeft, top: tipTop }}
+          className={`ai-avatar-tip ai-ui--${resolvedUiStyle} ${tipOnLeft ? "ai-avatar-tip--left" : "ai-avatar-tip--right"}`}
+          style={{ ...uiThemeVariables, left: tipLeft, top: tipTop }}
           onPointerEnter={handleTipHoverEnter}
           onPointerLeave={handleTipHoverLeave}
         >
@@ -307,6 +321,8 @@ export function AiAssistantWidget({
           tts={tts}
           speech={speech}
           quickPrompts={quickPrompts}
+          uiStyle={resolvedUiStyle}
+          themeStyle={uiThemeVariables}
           onToggleTtsAuto={onToggleTtsAuto}
           onToggleTtsEngine={onToggleTtsEngine}
           chats={chat.chats}
