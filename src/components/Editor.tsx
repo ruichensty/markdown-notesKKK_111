@@ -6,7 +6,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import type { Note } from "@types";
+import type { AiEditorSnapshot, Note } from "@types";
 import { useDebounce, useTypingSound } from "@hooks";
 import { generateId } from "@utils/export";
 import { idbSaveFile } from "@utils/indexedDBStorage";
@@ -40,6 +40,8 @@ interface EditorProps {
 
 export interface EditorHandle {
   scrollToLine: (line: number) => void;
+  getSnapshot: () => AiEditorSnapshot;
+  applyContent: (nextContent: string, selectionStart?: number, selectionEnd?: number) => void;
 }
 
 const FONT_SIZE_MAP: Record<string, number> = {
@@ -133,6 +135,32 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (!ta) return;
       const lineH = parseFloat(getComputedStyle(ta).lineHeight) || 20;
       ta.scrollTop = line * lineH - ta.clientHeight / 3;
+    },
+    getSnapshot: () => {
+      const ta = textareaRef.current;
+      const currentContent = contentRef.current;
+      return {
+        noteId: noteIdRef.current,
+        title,
+        content: currentContent,
+        selectionStart: ta?.selectionStart ?? currentContent.length,
+        selectionEnd: ta?.selectionEnd ?? currentContent.length,
+      };
+    },
+    applyContent: (
+      nextContent: string,
+      selectionStart = nextContent.length,
+      selectionEnd = selectionStart
+    ) => {
+      contentRef.current = nextContent;
+      setContent(nextContent);
+      window.setTimeout(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        ta.focus();
+        ta.selectionStart = Math.min(selectionStart, nextContent.length);
+        ta.selectionEnd = Math.min(selectionEnd, nextContent.length);
+      }, 0);
     },
   }));
 

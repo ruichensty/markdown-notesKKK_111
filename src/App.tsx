@@ -30,7 +30,15 @@ import {
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
-import type { Note } from "@types";
+import type {
+  AiEditorSnapshot,
+  AiNoteActionResult,
+  AiNoteApplyMode,
+  AiNoteApplyPreview,
+  AiNoteContext,
+  AiNoteContextMode,
+  Note,
+} from "@types";
 import {
   buildMobileOpenUrl,
   getMobileViewMode,
@@ -38,6 +46,11 @@ import {
   type SharedViewMode,
 } from "@utils/mobileOpenUrl";
 import { applyTemplateVariables } from "@utils/template";
+import {
+  buildAiNoteApplyPreview,
+  buildAiNoteContext,
+  deriveAiNoteTitle,
+} from "@utils/aiNoteActions";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
@@ -201,6 +214,7 @@ function AppContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
   const currentNoteRef = useRef<Note | null>(null);
+  const [aiUndoPreview, setAiUndoPreview] = useState<AiNoteApplyPreview | null>(null);
 
   useEffect(() => {
     currentNoteRef.current = currentNote;
@@ -209,6 +223,85 @@ function AppContent() {
   const handleJumpToLine = useCallback((line: number) => {
     editorRef.current?.scrollToLine(line);
   }, []);
+
+  const getAiEditorSnapshot = useCallback((): AiEditorSnapshot | null => {
+    const editorSnapshot = editorRef.current?.getSnapshot();
+    if (editorSnapshot) return editorSnapshot;
+    const note = currentNoteRef.current;
+    if (!note) return null;
+    return {
+      noteId: note.id,
+      title: note.title || "Untitled",
+      content: note.content,
+      selectionStart: note.content.length,
+      selectionEnd: note.content.length,
+    };
+  }, []);
+
+  const getAiNoteContext = useCallback(
+    (mode: AiNoteContextMode): AiNoteContext | null => {
+      const snapshot = getAiEditorSnapshot();
+      return snapshot ? buildAiNoteContext(snapshot, mode) : null;
+    },
+    [getAiEditorSnapshot]
+  );
+
+  const createAiNoteApplyPreview = useCallback(
+    (mode: AiNoteApplyMode, content: string): AiNoteApplyPreview | null =>
+      buildAiNoteApplyPreview(getAiEditorSnapshot(), mode, content),
+    [getAiEditorSnapshot]
+  );
+
+  const applyAiNotePreview = useCallback(
+    (preview: AiNoteApplyPreview): AiNoteActionResult => {
+      if (preview.mode === "new-note") {
+        const sourceNote = currentNoteRef.current;
+        createNote({
+          title: deriveAiNoteTitle(preview.afterContent),
+          content: preview.afterContent,
+          folderIds: sourceNote?.folderIds || [],
+        });
+        setViewMode("split");
+        setAiUndoPreview(null);
+        showToast("已创建 AI 笔记", "success");
+        return { ok: true, message: "已创建新笔记" };
+      }
+
+      const latest = getAiEditorSnapshot();
+      if (!latest || latest.noteId !== preview.noteId || latest.content !== preview.beforeContent) {
+        return { ok: false, message: "笔记内容已变化，请重新生成应用预览" };
+      }
+
+      if (editorRef.current) {
+        editorRef.current.applyContent(preview.afterContent, preview.caretStart, preview.caretEnd);
+      } else if (preview.noteId) {
+        updateNote(preview.noteId, { content: preview.afterContent });
+      }
+      setAiUndoPreview(preview);
+      showToast(preview.label, "success");
+      return { ok: true, message: `${preview.label}，可撤销` };
+    },
+    [createNote, getAiEditorSnapshot, showToast, updateNote]
+  );
+
+  const undoAiNoteApply = useCallback((): AiNoteActionResult => {
+    const preview = aiUndoPreview;
+    if (!preview || !preview.noteId) return { ok: false, message: "没有可撤销的 AI 修改" };
+    const latest = getAiEditorSnapshot();
+    if (!latest || latest.noteId !== preview.noteId || latest.content !== preview.afterContent) {
+      setAiUndoPreview(null);
+      return { ok: false, message: "笔记已继续编辑，无法安全撤销" };
+    }
+
+    if (editorRef.current) {
+      editorRef.current.applyContent(preview.beforeContent, preview.caretStart, preview.caretStart);
+    } else {
+      updateNote(preview.noteId, { content: preview.beforeContent });
+    }
+    setAiUndoPreview(null);
+    showToast("已撤销 AI 修改", "success");
+    return { ok: true, message: "已撤销上一次 AI 修改" };
+  }, [aiUndoPreview, getAiEditorSnapshot, showToast, updateNote]);
 
   const handleNewNote = useCallback(
     (folderIds?: string[], templateId?: string) => {
@@ -897,6 +990,7 @@ function AppContent() {
         <UsageTimeWidget hidden={isMobile} />
         <AiAssistantWidget
           hidden={!settings.aiAssistant}
+          noteId={currentNote?.id ?? null}
           noteTitle={currentNote ? currentNote.title || "Untitled" : null}
           noteContent={currentNote?.content ?? null}
           avatarMode={settings.aiAvatarMode}
@@ -910,6 +1004,11 @@ function AppContent() {
           config={aiConfig}
           tts={aiTts}
           quickPrompts={aiQuickPrompts}
+          getNoteContext={getAiNoteContext}
+          createNoteApplyPreview={createAiNoteApplyPreview}
+          onApplyNotePreview={applyAiNotePreview}
+          canUndoNoteApply={aiUndoPreview?.noteId === currentNoteId}
+          onUndoNoteApply={undoAiNoteApply}
           onToggleTtsAuto={handleToggleTtsAuto}
           onToggleTtsEngine={handleToggleTtsEngine}
           pos={settings.aiWidgetPos}

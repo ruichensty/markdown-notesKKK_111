@@ -24,13 +24,27 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof AiChatPanel>
   const props: React.ComponentProps<typeof AiChatPanel> = {
     anchor: { x: 900, y: 500 },
     noteTitle: "测试笔记",
-    noteContent: "需要保护的笔记内容",
     keyMissing: false,
     tts,
     speech,
     quickPrompts: [],
     uiStyle: "companion",
     themeStyle: {},
+    getNoteContext: mode => ({
+      mode,
+      title: "测试笔记",
+      content: "需要保护的笔记内容",
+      label: mode === "full" ? "全文" : "当前范围",
+      sourceStart: 0,
+      sourceEnd: 10,
+      totalChars: 10,
+      sentChars: 10,
+      truncated: false,
+    }),
+    createNoteApplyPreview: vi.fn(() => null),
+    onApplyNotePreview: vi.fn(() => ({ ok: true, message: "已应用" })),
+    canUndoNoteApply: false,
+    onUndoNoteApply: vi.fn(() => ({ ok: true, message: "已撤销" })),
     onToggleTtsAuto: vi.fn(),
     onToggleTtsEngine: vi.fn(),
     chats: [],
@@ -69,14 +83,16 @@ describe("AiChatPanel", () => {
     const prompt = screen.getByRole("button", { name: "总结笔记" });
     expect(prompt).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: /引用当前笔记/ }));
+    fireEvent.change(screen.getByLabelText("选择发送给 AI 的笔记范围"), {
+      target: { value: "full" },
+    });
     expect(prompt).toBeEnabled();
     fireEvent.click(prompt);
 
-    expect(onSend).toHaveBeenCalledWith("请总结笔记", {
-      title: "测试笔记",
-      content: "需要保护的笔记内容",
-    });
+    expect(onSend).toHaveBeenCalledWith(
+      "请总结笔记",
+      expect.objectContaining({ mode: "full", title: "测试笔记", content: "需要保护的笔记内容" })
+    );
   });
 
   it("allows generation to stop before the first response token arrives", () => {
@@ -127,5 +143,39 @@ describe("AiChatPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "删除", exact: true }));
     expect(onDeleteChat).toHaveBeenCalledWith(activeChat.id);
+  });
+
+  it("previews an assistant response before applying it to a note", () => {
+    const activeChat: AiChat = {
+      id: "chat-1",
+      title: "测试会话",
+      messages: [{ role: "assistant", content: "AI 生成内容", ts: 1 }],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const preview = {
+      mode: "append" as const,
+      noteId: "note-1",
+      noteTitle: "测试笔记",
+      label: "追加到笔记末尾",
+      beforeContent: "原内容",
+      afterContent: "原内容\n\nAI 生成内容",
+      caretStart: 5,
+      caretEnd: 12,
+    };
+    const onApplyNotePreview = vi.fn(() => ({ ok: true, message: "已应用" }));
+
+    renderPanel({
+      chats: [activeChat],
+      activeChat,
+      activeChatId: activeChat.id,
+      createNoteApplyPreview: vi.fn(() => preview),
+      onApplyNotePreview,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
+    expect(screen.getByRole("alertdialog", { name: "确认应用 AI 回复" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认应用" }));
+    expect(onApplyNotePreview).toHaveBeenCalledWith(preview);
   });
 });

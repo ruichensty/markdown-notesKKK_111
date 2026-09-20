@@ -1,4 +1,4 @@
-import type { AiChatMessage, AiProviderId } from "@types";
+import type { AiChatMessage, AiNoteContext, AiProviderId } from "@types";
 
 export interface AiProviderPreset {
   id: AiProviderId;
@@ -179,7 +179,7 @@ export async function streamAiCompletion(options: StreamAiOptions): Promise<stri
 
 export function buildContextMessages(
   history: AiChatMessage[],
-  noteContext: { title: string; content: string } | null,
+  noteContext: AiNoteContext | null,
   maxHistory = 20,
   maxNoteChars = 8000
 ): { role: string; content: string }[] {
@@ -192,7 +192,7 @@ export function buildContextMessages(
         : noteContext.content;
     result.push({
       role: "system",
-      content: `用户正在使用 Markdown 笔记应用，当前打开的笔记标题为「${noteContext.title || "Untitled"}」，内容如下（markdown 源码）：\n\n${truncated}\n\n你可以基于这篇笔记回答问题、总结、润色或续写。涉及代码时给出 markdown 代码块。`,
+      content: `用户正在使用 Markdown 笔记应用，当前笔记标题为「${noteContext.title || "Untitled"}」。本次明确授权引用的范围是${noteContext.label}，内容如下（markdown 源码）：\n\n${truncated}\n\n请只基于用户授权的范围回答、总结、润色或续写。涉及代码时给出 markdown 代码块。`,
     });
   }
 

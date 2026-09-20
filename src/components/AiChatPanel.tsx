@@ -1,7 +1,15 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AiChat, BuiltInAiUiStyle } from "@types";
+import type {
+  AiChat,
+  AiNoteActionResult,
+  AiNoteApplyMode,
+  AiNoteApplyPreview,
+  AiNoteContext,
+  AiNoteContextMode,
+  BuiltInAiUiStyle,
+} from "@types";
 import type { SpeechController } from "@hooks/useSpeech";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
@@ -15,11 +23,15 @@ export interface TtsPanelConfig {
 interface AiChatPanelProps {
   anchor: { x: number; y: number };
   noteTitle: string | null;
-  noteContent: string | null;
   keyMissing: boolean;
   tts: TtsPanelConfig;
   speech: SpeechController;
   quickPrompts: AiQuickPrompt[];
+  getNoteContext: (mode: AiNoteContextMode) => AiNoteContext | null;
+  createNoteApplyPreview: (mode: AiNoteApplyMode, content: string) => AiNoteApplyPreview | null;
+  onApplyNotePreview: (preview: AiNoteApplyPreview) => AiNoteActionResult;
+  canUndoNoteApply: boolean;
+  onUndoNoteApply: () => AiNoteActionResult;
   uiStyle: BuiltInAiUiStyle;
   themeStyle: React.CSSProperties;
   onToggleTtsAuto: () => void;
@@ -30,7 +42,7 @@ interface AiChatPanelProps {
   onSelectChat: (id: string) => void;
   streaming: boolean;
   error: string | null;
-  onSend: (text: string, noteContext: { title: string; content: string } | null) => void;
+  onSend: (text: string, noteContext: AiNoteContext | null) => void;
   onStop: () => void;
   onNewChat: () => void;
   onDeleteChat: (id: string) => void;
@@ -42,6 +54,7 @@ const PANEL_WIDTH = 348;
 const PANEL_MAX_HEIGHT = 520;
 const VIEWPORT_MARGIN = 8;
 const BOTTOM_THRESHOLD = 56;
+type ContextSelection = "none" | AiNoteContextMode;
 
 interface ViewportBounds {
   width: number;
@@ -57,6 +70,11 @@ const MarkdownMessage = memo(function MarkdownMessage({ content }: { content: st
     </div>
   );
 });
+
+function contentExcerpt(content: string, maxChars = 600): string {
+  if (content.length <= maxChars) return content || "（空内容）";
+  return `${content.slice(0, maxChars)}\n…（预览已截断）`;
+}
 
 function getViewportBounds(): ViewportBounds {
   const viewport = window.visualViewport;
@@ -93,11 +111,15 @@ export function AiChatPanel(props: AiChatPanelProps) {
   const {
     anchor,
     noteTitle,
-    noteContent,
     keyMissing,
     tts,
     speech,
     quickPrompts,
+    getNoteContext,
+    createNoteApplyPreview,
+    onApplyNotePreview,
+    canUndoNoteApply,
+    onUndoNoteApply,
     uiStyle,
     themeStyle,
     onToggleTtsAuto,
@@ -117,9 +139,13 @@ export function AiChatPanel(props: AiChatPanelProps) {
   } = props;
 
   const [input, setInput] = useState("");
-  const [useNoteContext, setUseNoteContext] = useState(false);
+  const [contextMode, setContextMode] = useState<ContextSelection>("none");
+  const [contextInfo, setContextInfo] = useState<AiNoteContext | null>(null);
+  const [contextPreviewOpen, setContextPreviewOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [pendingDeleteChatId, setPendingDeleteChatId] = useState<string | null>(null);
+  const [noteApplyPreview, setNoteApplyPreview] = useState<AiNoteApplyPreview | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [viewport, setViewport] = useState<ViewportBounds>(getViewportBounds);
   const listRef = useRef<HTMLDivElement>(null);
@@ -127,6 +153,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const cancelDeleteButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelApplyButtonRef = useRef<HTMLButtonElement>(null);
   const followOutputRef = useRef(true);
   const { supported: ttsSupported, speakMessage, stop: stopSpeech, speechError } = speech;
   const autoReadKeysRef = useRef<Set<string>>(new Set());
@@ -220,30 +247,109 @@ export function AiChatPanel(props: AiChatPanelProps) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [pendingDeleteChatId]);
 
+  useEffect(() => {
+    if (!noteApplyPreview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setNoteApplyPreview(null);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [noteApplyPreview]);
+
+  const resolveContext = (): { valid: boolean; value: AiNoteContext | null } => {
+    if (contextMode === "none") return { valid: true, value: null };
+    const context = getNoteContext(contextMode);
+    if (!context) {
+      setContextInfo(null);
+      setActionMessage(
+        contextMode === "selection" ? "请先在编辑器中选择一段文字" : "当前没有可引用的笔记内容"
+      );
+      return { valid: false, value: null };
+    }
+    setContextInfo(context);
+    return { valid: true, value: context };
+  };
+
+  const handleContextModeChange = (mode: ContextSelection) => {
+    setContextMode(mode);
+    setContextPreviewOpen(false);
+    setActionMessage(null);
+    if (mode === "none") {
+      setContextInfo(null);
+      return;
+    }
+    const context = getNoteContext(mode);
+    setContextInfo(context);
+    if (!context) {
+      setActionMessage(mode === "selection" ? "请先在编辑器中选择一段文字" : "无法读取当前笔记");
+    }
+  };
+
   const sendPrompt = (prompt: AiQuickPrompt) => {
     if (streaming || keyMissing) return;
-    if (prompt.needsNote && (!useNoteContext || noteTitle === null)) return;
+    if (prompt.needsNote && contextMode === "none") return;
+    const context = resolveContext();
+    if (!context.valid) return;
     setQuickOpen(false);
     followOutputRef.current = true;
     setShowJumpToLatest(false);
-    const noteContext =
-      useNoteContext && noteTitle !== null
-        ? { title: noteTitle, content: noteContent ?? "" }
-        : null;
-    onSend(prompt.text, noteContext);
+    onSend(prompt.text, context.value);
   };
 
   const handleSend = () => {
     const text = input.trim();
     if (!text || streaming) return;
-    const noteContext =
-      useNoteContext && noteTitle !== null
-        ? { title: noteTitle, content: noteContent ?? "" }
-        : null;
+    const context = resolveContext();
+    if (!context.valid) return;
     followOutputRef.current = true;
     setShowJumpToLatest(false);
-    onSend(text, noteContext);
+    onSend(text, context.value);
     setInput("");
+  };
+
+  const copyAssistantMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setActionMessage("AI 回复已复制");
+    } catch {
+      setActionMessage("复制失败，请手动选择内容");
+    }
+  };
+
+  const openNoteApplyPreview = (mode: AiNoteApplyMode, content: string) => {
+    const preview = createNoteApplyPreview(mode, content);
+    if (!preview) {
+      setActionMessage(
+        mode === "replace-selection" ? "请先在编辑器中选择要替换的文字" : "无法创建应用预览"
+      );
+      return;
+    }
+    setNoteApplyPreview(preview);
+    setActionMessage(null);
+    window.requestAnimationFrame(() => cancelApplyButtonRef.current?.focus());
+  };
+
+  const closeNoteApplyPreview = () => {
+    setNoteApplyPreview(null);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const confirmNoteApply = () => {
+    if (!noteApplyPreview) return;
+    const result = onApplyNotePreview(noteApplyPreview);
+    setActionMessage(result.message);
+    if (result.ok) {
+      setNoteApplyPreview(null);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  };
+
+  const handleUndoNoteApply = () => {
+    const result = onUndoNoteApply();
+    setActionMessage(result.message);
   };
 
   const handleListScroll = () => {
@@ -399,6 +505,43 @@ export function AiChatPanel(props: AiChatPanelProps) {
         </div>
       )}
 
+      {noteApplyPreview && (
+        <div className="ai-note-apply-preview" role="alertdialog" aria-label="确认应用 AI 回复">
+          <div className="ai-note-apply-header">
+            <div>
+              <strong>{noteApplyPreview.label}</strong>
+              <span>{noteApplyPreview.noteTitle}</span>
+            </div>
+            <button
+              type="button"
+              className="ai-note-apply-close"
+              onClick={closeNoteApplyPreview}
+              aria-label="关闭应用预览"
+            >
+              ×
+            </button>
+          </div>
+          {noteApplyPreview.mode !== "new-note" && (
+            <div className="ai-note-apply-column">
+              <span>修改前</span>
+              <pre>{contentExcerpt(noteApplyPreview.beforeContent)}</pre>
+            </div>
+          )}
+          <div className="ai-note-apply-column ai-note-apply-column--after">
+            <span>{noteApplyPreview.mode === "new-note" ? "新笔记内容" : "修改后"}</span>
+            <pre>{contentExcerpt(noteApplyPreview.afterContent)}</pre>
+          </div>
+          <div className="ai-note-apply-actions">
+            <button ref={cancelApplyButtonRef} type="button" onClick={closeNoteApplyPreview}>
+              取消
+            </button>
+            <button type="button" className="ai-note-apply-confirm" onClick={confirmNoteApply}>
+              确认应用
+            </button>
+          </div>
+        </div>
+      )}
+
       {keyMissing && (
         <div className="ai-chat-notice">
           <p>尚未配置 AI 服务。需要在设置中填写 API Key 后才能对话，密钥仅保存在本机。</p>
@@ -419,7 +562,7 @@ export function AiChatPanel(props: AiChatPanelProps) {
             <div className="ai-chat-empty">
               {keyMissing
                 ? "配置 API Key 后即可开始对话"
-                : "你好！我是 AI 助手，可以回答问题、总结润色笔记。开启「引用当前笔记」后还能针对正在编辑的内容工作。"}
+                : "你好！我是 AI 助手，可以回答问题、总结润色笔记。选择选区、章节或全文后，还能针对指定内容工作。"}
             </div>
             {!keyMissing && quickPrompts.length > 0 && (
               <div className="ai-quick-grid">
@@ -430,13 +573,14 @@ export function AiChatPanel(props: AiChatPanelProps) {
                     className="ai-quick-chip"
                     onClick={() => sendPrompt(p)}
                     disabled={
-                      streaming || (p.needsNote === true && (!useNoteContext || noteTitle === null))
+                      streaming ||
+                      (p.needsNote === true && (contextMode === "none" || noteTitle === null))
                     }
                     title={
                       p.needsNote && noteTitle === null
                         ? `${p.text}（当前未打开笔记）`
-                        : p.needsNote && !useNoteContext
-                          ? "请先开启“引用当前笔记”"
+                        : p.needsNote && contextMode === "none"
+                          ? "请先选择要引用的笔记范围"
                           : p.text
                     }
                   >
@@ -448,9 +592,9 @@ export function AiChatPanel(props: AiChatPanelProps) {
             {!keyMissing &&
               quickPrompts.some(prompt => prompt.needsNote) &&
               noteTitle !== null &&
-              !useNoteContext && (
+              contextMode === "none" && (
                 <div className="ai-chat-context-note">
-                  开启“引用当前笔记”后，可使用总结、润色等笔记操作
+                  选择选区、章节或全文后，可使用总结、润色等笔记操作
                 </div>
               )}
           </>
@@ -510,6 +654,31 @@ export function AiChatPanel(props: AiChatPanelProps) {
                       )}
                     </button>
                   )}
+                  {!streaming && (
+                    <div className="ai-msg-actions" aria-label="AI 回复操作">
+                      <button type="button" onClick={() => void copyAssistantMessage(m.content)}>
+                        复制
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openNoteApplyPreview("append", m.content)}
+                      >
+                        追加
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openNoteApplyPreview("replace-selection", m.content)}
+                      >
+                        替换选区
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openNoteApplyPreview("new-note", m.content)}
+                      >
+                        新建笔记
+                      </button>
+                    </div>
+                  )}
                 </>
               ) : lastAssistantStreaming && i === messages.length - 1 ? (
                 <div className="ai-msg-bubble ai-msg-typing">
@@ -546,22 +715,56 @@ export function AiChatPanel(props: AiChatPanelProps) {
         </div>
       )}
 
+      {(actionMessage || canUndoNoteApply) && (
+        <div className="ai-note-action-status" role="status">
+          <span>{actionMessage || "AI 修改已应用"}</span>
+          {canUndoNoteApply && (
+            <button type="button" onClick={handleUndoNoteApply}>
+              撤销
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="ai-chat-input-area">
+        {contextInfo && contextMode !== "none" && (
+          <div className="ai-context-summary">
+            <button
+              type="button"
+              className="ai-context-summary-main"
+              onClick={() => setContextPreviewOpen(open => !open)}
+              aria-expanded={contextPreviewOpen}
+            >
+              <span>{contextInfo.label}</span>
+              <small>
+                {contextInfo.sentChars} 字
+                {contextInfo.truncated ? ` / 共 ${contextInfo.totalChars} 字` : ""}
+              </small>
+            </button>
+            <button
+              type="button"
+              className="ai-context-refresh"
+              onClick={() => handleContextModeChange(contextMode)}
+              title="重新读取编辑器中的范围"
+            >
+              刷新
+            </button>
+            {contextPreviewOpen && <pre>{contentExcerpt(contextInfo.content, 420)}</pre>}
+          </div>
+        )}
         <div className="ai-chat-toolbar">
-          <button
-            type="button"
-            className={`ai-chat-chip ${useNoteContext ? "ai-chat-chip--active" : ""}`}
-            onClick={() => setUseNoteContext(v => !v)}
+          <select
+            className={`ai-context-select ${contextMode !== "none" ? "ai-context-select--active" : ""}`}
+            value={contextMode}
+            onChange={event => handleContextModeChange(event.target.value as ContextSelection)}
             disabled={noteTitle === null}
-            aria-pressed={useNoteContext}
-            title={
-              noteTitle === null
-                ? "当前没有打开的笔记"
-                : "把当前笔记内容注入对话上下文（截断至 8000 字）"
-            }
+            aria-label="选择发送给 AI 的笔记范围"
           >
-            引用当前笔记{noteTitle ? `「${noteTitle.slice(0, 8)}」` : ""}
-          </button>
+            <option value="none">不引用笔记</option>
+            <option value="selection">引用当前选区</option>
+            <option value="section">引用当前章节</option>
+            <option value="full">引用整篇笔记</option>
+          </select>
           {messages.length > 0 && quickPrompts.length > 0 && !keyMissing && (
             <div className="ai-quick-anchor">
               <button
@@ -592,14 +795,14 @@ export function AiChatPanel(props: AiChatPanelProps) {
                         onClick={() => sendPrompt(p)}
                         disabled={
                           streaming ||
-                          (p.needsNote === true && (!useNoteContext || noteTitle === null))
+                          (p.needsNote === true && (contextMode === "none" || noteTitle === null))
                         }
                         role="menuitem"
                         title={
                           p.needsNote && noteTitle === null
                             ? "当前没有打开的笔记"
-                            : p.needsNote && !useNoteContext
-                              ? "请先开启“引用当前笔记”"
+                            : p.needsNote && contextMode === "none"
+                              ? "请先选择要引用的笔记范围"
                               : p.text
                         }
                       >

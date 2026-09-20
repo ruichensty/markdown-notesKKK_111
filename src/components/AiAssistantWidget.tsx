@@ -4,7 +4,15 @@ import { useSpeech } from "@hooks/useSpeech";
 import { AiChatPanel, type TtsPanelConfig } from "./AiChatPanel";
 import { AvatarRenderer } from "./avatar/AvatarRenderer";
 import type { AvatarAnimation, AvatarMode, AvatarSkin, AvatarState } from "@types";
-import type { AiUiStyle, AiUiThemePackage } from "@types";
+import type {
+  AiNoteActionResult,
+  AiNoteApplyMode,
+  AiNoteApplyPreview,
+  AiNoteContext,
+  AiNoteContextMode,
+  AiUiStyle,
+  AiUiThemePackage,
+} from "@types";
 import { getAiUiBaseStyle, getAiUiThemeVariables } from "@utils/aiUiTheme";
 import type { AiQuickPrompt } from "../constants/aiPrompts";
 
@@ -15,6 +23,7 @@ const TIP_GAP = 12;
 
 export interface AiAssistantWidgetProps {
   hidden: boolean;
+  noteId: string | null;
   noteTitle: string | null;
   noteContent: string | null;
   avatarMode: AvatarMode;
@@ -28,6 +37,11 @@ export interface AiAssistantWidgetProps {
   config: { baseUrl: string; apiKey: string; model: string };
   tts: TtsPanelConfig;
   quickPrompts: AiQuickPrompt[];
+  getNoteContext: (mode: AiNoteContextMode) => AiNoteContext | null;
+  createNoteApplyPreview: (mode: AiNoteApplyMode, content: string) => AiNoteApplyPreview | null;
+  onApplyNotePreview: (preview: AiNoteApplyPreview) => AiNoteActionResult;
+  canUndoNoteApply: boolean;
+  onUndoNoteApply: () => AiNoteActionResult;
   onToggleTtsAuto: () => void;
   onToggleTtsEngine: () => void;
   pos: { x: number; y: number } | null;
@@ -58,6 +72,7 @@ function clampPos(x: number, y: number): { x: number; y: number } {
 
 export function AiAssistantWidget({
   hidden,
+  noteId,
   noteTitle,
   noteContent,
   avatarMode,
@@ -71,6 +86,11 @@ export function AiAssistantWidget({
   config,
   tts,
   quickPrompts,
+  getNoteContext,
+  createNoteApplyPreview,
+  onApplyNotePreview,
+  canUndoNoteApply,
+  onUndoNoteApply,
   onToggleTtsAuto,
   onToggleTtsEngine,
   pos,
@@ -314,13 +334,18 @@ export function AiAssistantWidget({
 
       {panelOpen && (
         <AiChatPanel
+          key={noteId ?? "no-note"}
           anchor={botPos}
           noteTitle={noteTitle}
-          noteContent={noteContent}
           keyMissing={keyMissing}
           tts={tts}
           speech={speech}
           quickPrompts={quickPrompts}
+          getNoteContext={getNoteContext}
+          createNoteApplyPreview={createNoteApplyPreview}
+          onApplyNotePreview={onApplyNotePreview}
+          canUndoNoteApply={canUndoNoteApply}
+          onUndoNoteApply={onUndoNoteApply}
           uiStyle={resolvedUiStyle}
           themeStyle={uiThemeVariables}
           onToggleTtsAuto={onToggleTtsAuto}
