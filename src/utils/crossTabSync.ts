@@ -1,5 +1,5 @@
 export type CrossTabDataDomain =
-  "notes" | "settings" | "folders" | "templates" | "theme" | "ai-chats";
+  "notes" | "note-versions" | "settings" | "folders" | "templates" | "theme" | "ai-chats";
 
 export interface CrossTabSyncMessage {
   type: "data-changed";
@@ -11,6 +11,7 @@ export interface CrossTabSyncMessage {
 const CHANNEL_NAME = "markdown-notes-data-sync-v1";
 const DOMAINS = new Set<CrossTabDataDomain>([
   "notes",
+  "note-versions",
   "settings",
   "folders",
   "templates",

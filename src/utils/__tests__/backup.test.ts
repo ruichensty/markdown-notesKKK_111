@@ -41,7 +41,29 @@ describe("validateBackup", () => {
   });
 
   it("版本高于当前版本抛出错误", () => {
-    expect(() => validateBackup({ ...validBackup, version: 2 })).toThrow(/更新版本/);
+    expect(() => validateBackup({ ...validBackup, version: 3 })).toThrow(/更新版本/);
+  });
+
+  it("v1 备份自动补充空版本历史", () => {
+    expect(validateBackup(validBackup).data.noteVersions).toEqual([]);
+  });
+
+  it("v2 备份缺少版本历史时拒绝导入", () => {
+    expect(() =>
+      validateBackup({
+        format: "markdown-notes-backup",
+        version: 2,
+        exportedAt: 1700000000000,
+        data: {
+          notes: [],
+          folders: [],
+          settings: [],
+          templates: [],
+          aiChats: [],
+          files: [],
+        },
+      })
+    ).toThrow(/noteVersions/);
   });
 
   it("缺少数据字段抛出错误", () => {

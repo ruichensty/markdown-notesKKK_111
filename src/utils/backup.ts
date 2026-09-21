@@ -1,4 +1,4 @@
-import type { Note, Folder, NoteTemplate, AiChat } from "@types";
+import type { Note, Folder, NoteTemplate, AiChat, NoteVersion } from "@types";
 import {
   idbGetAllAiChats,
   idbGetAllFiles,
@@ -6,13 +6,14 @@ import {
   idbGetAllNotes,
   idbGetAllSettings,
   idbGetAllTemplates,
+  idbGetAllNoteVersions,
   idbReplaceAllData,
   type StoredFileRecord,
 } from "./indexedDBStorage";
 import { publishCrossTabChange, type CrossTabDataDomain } from "./crossTabSync";
 
 const BACKUP_FORMAT = "markdown-notes-backup";
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 const ENCRYPTED_BACKUP_FORMAT = "markdown-notes-backup-encrypted";
 const ENCRYPTED_BACKUP_VERSION = 1;
 const PBKDF2_ITERATIONS = 250_000;
@@ -37,6 +38,7 @@ export interface BackupFile {
     templates: NoteTemplate[];
     aiChats: AiChat[];
     files: BackupFileItem[];
+    noteVersions: NoteVersion[];
   };
 }
 
@@ -46,6 +48,7 @@ export interface BackupResult {
   byteSize: number;
   noteCount: number;
   fileCount: number;
+  versionCount: number;
   encrypted: boolean;
 }
 
@@ -75,6 +78,7 @@ export interface BackupInspection {
   templateCount: number;
   aiChatCount: number;
   fileCount: number;
+  versionCount: number;
 }
 
 export class BackupPasswordRequiredError extends Error {
@@ -235,13 +239,14 @@ function backupTimestamp(): string {
 }
 
 async function collectBackup(): Promise<BackupFile> {
-  const [notes, folders, settings, templates, aiChats, files] = await Promise.all([
+  const [notes, folders, settings, templates, aiChats, files, noteVersions] = await Promise.all([
     idbGetAllNotes(),
     idbGetAllFolders(),
     idbGetAllSettings(),
     idbGetAllTemplates(),
     idbGetAllAiChats(),
     idbGetAllFiles(),
+    idbGetAllNoteVersions(),
   ]);
 
   return {
@@ -261,6 +266,7 @@ async function collectBackup(): Promise<BackupFile> {
         fileType: f.fileType,
         dataBase64: arrayBufferToBase64(f.data),
       })),
+      noteVersions: noteVersions || [],
     },
   };
 }
@@ -279,6 +285,7 @@ export async function createBackup(password?: string): Promise<BackupResult> {
     byteSize,
     noteCount: backup.data.notes.length,
     fileCount: backup.data.files.length,
+    versionCount: backup.data.noteVersions.length,
     encrypted,
   };
 }
@@ -308,6 +315,10 @@ export function validateBackup(raw: unknown): BackupFile {
       throw new Error(`备份文件缺少「${field}」数据，可能已损坏`);
     }
   }
+  if (candidate.version >= 2 && !Array.isArray(data.noteVersions)) {
+    throw new Error("备份文件缺少「noteVersions」数据，可能已损坏");
+  }
+  if (!Array.isArray(data.noteVersions)) data.noteVersions = [];
   for (const file of data.files) {
     if (typeof file.dataBase64 !== "string") {
       throw new Error("备份中的附件数据损坏，无法恢复");
@@ -351,6 +362,7 @@ export async function inspectBackup(file: File, password?: string): Promise<Back
     templateCount: backup.data.templates.length,
     aiChatCount: backup.data.aiChats.length,
     fileCount: backup.data.files.length,
+    versionCount: backup.data.noteVersions.length,
   };
 }
 
@@ -374,10 +386,12 @@ export async function restoreBackup(file: File, password?: string): Promise<void
     templates: backup.data.templates,
     aiChats: backup.data.aiChats,
     files,
+    noteVersions: backup.data.noteVersions || [],
   });
 
   for (const domain of [
     "notes",
+    "note-versions",
     "folders",
     "settings",
     "templates",

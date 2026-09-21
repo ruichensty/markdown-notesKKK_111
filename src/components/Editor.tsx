@@ -42,6 +42,7 @@ export interface EditorHandle {
   scrollToLine: (line: number) => void;
   getSnapshot: () => AiEditorSnapshot;
   applyContent: (nextContent: string, selectionStart?: number, selectionEnd?: number) => void;
+  applySnapshot: (nextTitle: string, nextContent: string) => void;
   flushDraft: () => void;
 }
 
@@ -198,6 +199,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         ta.focus();
         ta.selectionStart = Math.min(selectionStart, nextContent.length);
         ta.selectionEnd = Math.min(selectionEnd, nextContent.length);
+      }, 0);
+    },
+    applySnapshot: (nextTitle: string, nextContent: string) => {
+      setDraftTitle(nextTitle);
+      setDraftContent(nextContent);
+      window.setTimeout(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = 0;
       }, 0);
     },
     flushDraft,

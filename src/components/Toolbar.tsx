@@ -15,6 +15,7 @@ interface ToolbarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onToggleSettings: () => void;
+  onOpenHistory: () => void;
   onOpenQrCode: () => void;
   onGoHome: () => void;
   focusMode: boolean;
@@ -33,6 +34,7 @@ function ToolbarBase({
   viewMode,
   onViewModeChange,
   onToggleSettings,
+  onOpenHistory,
   onOpenQrCode,
   onGoHome,
   focusMode,
@@ -355,6 +357,29 @@ function ToolbarBase({
               />
             </svg>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className="toolbar-icon-btn disabled:opacity-40 disabled:cursor-not-allowed"
+          title="版本历史"
+          aria-label="打开版本历史"
+          disabled={!currentNote}
+        >
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.35}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3.1 4.5A6 6 0 118 14" />
+            <path d="M3 1.8v3h3" />
+            <path d="M8 4.5V8l2.4 1.4" />
+          </svg>
         </button>
 
         <button onClick={onToggleSettings} className="toolbar-icon-btn" title="Settings">

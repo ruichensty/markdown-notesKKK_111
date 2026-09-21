@@ -25,6 +25,17 @@ export interface NoteFormData {
   folderIds?: string[];
 }
 
+export type NoteVersionSource = "auto" | "manual" | "restore";
+
+export interface NoteVersion {
+  id: string;
+  noteId: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  source: NoteVersionSource;
+}
+
 export interface Folder {
   id: string;
   name: string;

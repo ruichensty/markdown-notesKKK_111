@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, memo } from "react";
 import { OutlineView } from "./OutlineView";
 import { SortableNoteList } from "./SortableNoteList";
 import { SearchResults } from "./SearchResults";
+import { NoteSearchResults } from "./NoteSearchResults";
 import { SidebarTabs } from "./SidebarTabs";
 import type { SidebarTab } from "./SidebarTabs";
 import { FolderTree } from "./FolderTree";
@@ -9,6 +10,7 @@ import { EmptyStateIllustration } from "./EmptyStateIllustration";
 import { useOutline, useDebounce } from "@hooks";
 import { flattenFolderTree, collectFolderSubtreeIds, type FolderNodeData } from "@utils/folderTree";
 import { sortNotes } from "@utils/export";
+import { searchNotes, type NoteSearchDateRange, type NoteSearchScope } from "@utils/noteSearch";
 import type { Note, Folder } from "@types";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 
@@ -88,6 +90,8 @@ function NoteList({
   updateFolder,
 }: NoteListProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<NoteSearchScope>("all");
+  const [searchDateRange, setSearchDateRange] = useState<NoteSearchDateRange>("all");
   const [activeTab, setActiveTab] = useState<SidebarTab>("notes");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -101,6 +105,7 @@ function NoteList({
   const headings = useOutline(outlineContent);
 
   const debouncedSearchQuery = useDebounce(searchQuery, 200);
+  const isSearchPending = searchQuery.trim() !== debouncedSearchQuery.trim();
 
   const rootNotes = useMemo(() => {
     return sortNotes(
@@ -109,17 +114,11 @@ function NoteList({
   }, [notes]);
 
   const searchResults = useMemo(() => {
-    const normalizedQuery = debouncedSearchQuery.toLowerCase();
-    if (!normalizedQuery) return [];
-
-    return sortNotes(
-      notes.filter(
-        note =>
-          note.title.toLowerCase().includes(normalizedQuery) ||
-          note.content.toLowerCase().includes(normalizedQuery)
-      )
-    );
-  }, [notes, debouncedSearchQuery]);
+    return searchNotes(notes, debouncedSearchQuery, {
+      scope: searchScope,
+      dateRange: searchDateRange,
+    });
+  }, [notes, debouncedSearchQuery, searchScope, searchDateRange]);
 
   const selectedFolder = useMemo(
     () => folders.find(folder => folder.id === selectedFolderId) ?? null,
@@ -200,10 +199,10 @@ function NoteList({
   }, []);
 
   const visibleNoteIds = useMemo(() => {
-    if (searchQuery) return searchResults.map(n => n.id);
+    if (searchQuery) return isSearchPending ? [] : searchResults.map(result => result.note.id);
     if (selectedFolder) return selectedFolderNotes.map(n => n.id);
     return notes.map(n => n.id);
-  }, [searchQuery, selectedFolder, searchResults, selectedFolderNotes, notes]);
+  }, [searchQuery, isSearchPending, selectedFolder, searchResults, selectedFolderNotes, notes]);
 
   const handleSelectAll = useCallback(() => {
     if (visibleNoteIds.length > 0 && visibleNoteIds.every(id => selectedIds.has(id))) {
@@ -337,6 +336,30 @@ function NoteList({
           className="sidebar-search-input"
         />
       </div>
+      {searchQuery && (
+        <div className="sidebar-search-filters" aria-label="搜索筛选">
+          <select
+            value={searchScope}
+            onChange={event => setSearchScope(event.target.value as NoteSearchScope)}
+            aria-label="搜索范围"
+          >
+            <option value="all">全部范围</option>
+            <option value="title">仅标题</option>
+            <option value="content">仅正文</option>
+            <option value="tags">仅标签</option>
+          </select>
+          <select
+            value={searchDateRange}
+            onChange={event => setSearchDateRange(event.target.value as NoteSearchDateRange)}
+            aria-label="修改时间范围"
+          >
+            <option value="all">全部时间</option>
+            <option value="7d">近 7 天</option>
+            <option value="30d">近 30 天</option>
+          </select>
+          <span>{isSearchPending ? "搜索中…" : `${searchResults.length} 条`}</span>
+        </div>
+      )}
 
       <div className="sidebar-actions">
         <button
@@ -446,9 +469,15 @@ function NoteList({
       <div className="sidebar-content scrollbar-thin">
         {activeTab === "outline" ? (
           <OutlineView headings={headings} currentLine={0} onJumpToLine={handleJumpToLine} />
+        ) : searchQuery && isSearchPending ? (
+          <div className="sidebar-search-pending" role="status">
+            <span />
+            正在搜索…
+          </div>
         ) : searchQuery ? (
-          <SearchResults
-            notes={searchResults}
+          <NoteSearchResults
+            results={searchResults}
+            query={debouncedSearchQuery}
             activeNoteId={activeNoteId}
             onNoteSelect={onNoteSelect}
             onNoteDelete={onNoteDelete}

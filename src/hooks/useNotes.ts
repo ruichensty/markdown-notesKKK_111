@@ -1,11 +1,24 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { Note, NoteFormData, SaveStatus } from "@types";
+import type { Note, NoteFormData, NoteVersionSource, SaveStatus } from "@types";
 import { generateId, formatDate } from "@utils/export";
 import { saveSingleNote, deleteSingleNote, loadNotes, loadSingleNote } from "@utils/storage";
-import { idbDeleteFile } from "@utils/indexedDBStorage";
+import {
+  idbDeleteFile,
+  idbDeleteNoteVersion,
+  idbDeleteNoteVersions,
+  idbGetNoteVersions,
+  idbPruneNoteVersions,
+  idbSaveNoteVersion,
+} from "@utils/indexedDBStorage";
 import { invalidateAllDataCache } from "@utils/storage";
 import { diffNotes } from "@utils/noteDiff";
-import { subscribeCrossTabChange } from "@utils/crossTabSync";
+import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
+import {
+  createNoteVersion,
+  hasMeaningfulNoteChange,
+  NOTE_VERSION_LIMIT,
+  shouldCreateAutoVersion,
+} from "@utils/noteVersion";
 
 const SAVE_DEBOUNCE_MS = 300;
 const SAVE_RETRY_DELAYS_MS = [1000, 3000, 7000];
@@ -34,6 +47,40 @@ export function useNotes(selectedFolderId: string | null = null) {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const sourceIdRef = useRef(generateId());
   const currentNoteIdRef = useRef<string | null>(null);
+  const lastVersionAtRef = useRef(new Map<string, number | null>());
+  const [versionSaveError, setVersionSaveError] = useState<Error | null>(null);
+  const versionRetryRef = useRef<(() => Promise<void>) | null>(null);
+
+  const saveNoteVersion = useCallback(
+    async (
+      note: Pick<Note, "id" | "title" | "content">,
+      source: NoteVersionSource,
+      now = Date.now()
+    ) => {
+      await idbSaveNoteVersion(createNoteVersion(note, source, now));
+      await idbPruneNoteVersions(note.id, NOTE_VERSION_LIMIT);
+      lastVersionAtRef.current.set(note.id, now);
+      setVersionSaveError(null);
+      versionRetryRef.current = null;
+      publishCrossTabChange("note-versions");
+    },
+    []
+  );
+
+  const captureAutoVersion = useCallback(
+    async (previous: Note, next: Note) => {
+      if (!hasMeaningfulNoteChange(previous, next)) return;
+      let lastVersionAt = lastVersionAtRef.current.get(previous.id);
+      if (lastVersionAt === undefined) {
+        lastVersionAt = (await idbGetNoteVersions(previous.id))[0]?.createdAt ?? null;
+        lastVersionAtRef.current.set(previous.id, lastVersionAt);
+      }
+      const now = Date.now();
+      if (!shouldCreateAutoVersion(lastVersionAt, now)) return;
+      await saveNoteVersion(previous, "auto", now);
+    },
+    [saveNoteVersion]
+  );
 
   useEffect(() => {
     notesRef.current = notes;
@@ -80,6 +127,15 @@ export function useNotes(selectedFolderId: string | null = null) {
               const latest = await loadSingleNote(note.id);
               if (!latest) continue;
               if (latest.updatedAt > note.updatedAt) continue;
+              try {
+                await captureAutoVersion(latest, note);
+              } catch (versionError) {
+                console.error("Failed to save note version:", versionError);
+                const error =
+                  versionError instanceof Error ? versionError : new Error(String(versionError));
+                setVersionSaveError(error);
+                versionRetryRef.current = () => saveNoteVersion(latest, "auto");
+              }
               await saveSingleNote(note);
             }
             for (const note of deleted) await deleteSingleNote(note.id);
@@ -106,7 +162,7 @@ export function useNotes(selectedFolderId: string | null = null) {
 
       return false;
     },
-    [broadcastNotesChanged]
+    [broadcastNotesChanged, captureAutoVersion, saveNoteVersion]
   );
 
   useEffect(() => {
@@ -289,7 +345,26 @@ export function useNotes(selectedFolderId: string | null = null) {
           idbDeleteFile(att.id).catch(() => {});
         }
       }
+      void idbDeleteNoteVersions(id)
+        .then(() => publishCrossTabChange("note-versions"))
+        .catch(() => {});
+      lastVersionAtRef.current.delete(id);
       return prev.filter(n => n.id !== id);
+    });
+  }, []);
+
+  const deleteNoteVersion = useCallback(async (noteId: string, versionId: string) => {
+    await idbDeleteNoteVersion(versionId);
+    lastVersionAtRef.current.delete(noteId);
+    publishCrossTabChange("note-versions");
+  }, []);
+
+  const retryVersionSave = useCallback(() => {
+    const retry = versionRetryRef.current;
+    if (!retry) return;
+    setVersionSaveError(null);
+    void retry().catch(reason => {
+      setVersionSaveError(reason instanceof Error ? reason : new Error(String(reason)));
     });
   }, []);
 
@@ -302,6 +377,10 @@ export function useNotes(selectedFolderId: string | null = null) {
             idbDeleteFile(att.id).catch(() => {});
           }
         }
+        void idbDeleteNoteVersions(note.id)
+          .then(() => publishCrossTabChange("note-versions"))
+          .catch(() => {});
+        lastVersionAtRef.current.delete(note.id);
       }
       return prev.filter(n => !n.deletedAt);
     });
@@ -323,7 +402,10 @@ export function useNotes(selectedFolderId: string | null = null) {
       const next = [...prev];
       const [moved] = next.splice(activeIndex, 1);
       next.splice(overIndex, 0, moved);
-      return next.map((n, i) => ({ ...n, order: i }));
+      const now = Date.now();
+      return next.map((note, index) =>
+        note.order === index ? note : { ...note, order: index, updatedAt: now }
+      );
     });
   }, []);
 
@@ -342,7 +424,12 @@ export function useNotes(selectedFolderId: string | null = null) {
       const orderMap = new Map<string, number>();
       reordered.forEach((n, i) => orderMap.set(n.id, i));
 
-      return prev.map(n => (orderMap.has(n.id) ? { ...n, order: orderMap.get(n.id)! } : n));
+      const now = Date.now();
+      return prev.map(note => {
+        const nextOrder = orderMap.get(note.id);
+        if (nextOrder === undefined || note.order === nextOrder) return note;
+        return { ...note, order: nextOrder, updatedAt: now };
+      });
     });
   }, []);
 
@@ -368,5 +455,9 @@ export function useNotes(selectedFolderId: string | null = null) {
     clearSaveError: useCallback(() => setSaveError(false), []),
     retrySave,
     saveNow,
+    saveNoteVersion,
+    deleteNoteVersion,
+    versionSaveError,
+    retryVersionSave,
   };
 }

@@ -1459,6 +1459,7 @@ function SettingsPanelBase({
                     <span>{pendingBackupInspection.fileCount} 个附件</span>
                     <span>{pendingBackupInspection.templateCount} 个模板</span>
                     <span>{pendingBackupInspection.aiChatCount} 个 AI 会话</span>
+                    <span>{pendingBackupInspection.versionCount} 个历史版本</span>
                     <span>{(pendingBackupInspection.byteSize / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                 </div>

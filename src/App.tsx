@@ -27,6 +27,7 @@ import {
   TrashView,
   AiAssistantWidget,
   QRCodeDialog,
+  NoteHistoryDialog,
 } from "@components";
 import { ContextMenuProvider } from "@components/ContextMenu";
 import type { EditorHandle } from "@components/Editor";
@@ -38,6 +39,7 @@ import type {
   AiNoteContext,
   AiNoteContextMode,
   Note,
+  NoteVersion,
 } from "@types";
 import {
   buildMobileOpenUrl,
@@ -136,6 +138,7 @@ function AppContent() {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showQrDialog, setShowQrDialog] = useState(false);
+  const [showNoteHistory, setShowNoteHistory] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [sidebarDragWidth, setSidebarDragWidth] = useState<number | null>(null);
@@ -162,6 +165,10 @@ function AppContent() {
     saveStatus,
     retrySave,
     saveNow,
+    saveNoteVersion,
+    deleteNoteVersion,
+    versionSaveError,
+    retryVersionSave,
     trashedNotes,
     restoreNote,
     purgeNote,
@@ -262,6 +269,14 @@ function AppContent() {
     });
   }, [retryTemplateSave, showToast, templateSaveError]);
 
+  useEffect(() => {
+    if (!versionSaveError) return;
+    showToast("笔记正文已保存，但历史版本保存失败", "warning", 0, {
+      label: "重试版本保存",
+      onClick: retryVersionSave,
+    });
+  }, [retryVersionSave, showToast, versionSaveError]);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
   const currentNoteRef = useRef<Note | null>(null);
@@ -281,6 +296,11 @@ function AppContent() {
     editorRef.current?.scrollToLine(line);
   }, []);
 
+  const handleOpenNoteHistory = useCallback(() => {
+    editorRef.current?.flushDraft();
+    window.requestAnimationFrame(() => setShowNoteHistory(true));
+  }, []);
+
   const getAiEditorSnapshot = useCallback((): AiEditorSnapshot | null => {
     const editorSnapshot = editorRef.current?.getSnapshot();
     if (editorSnapshot) return editorSnapshot;
@@ -294,6 +314,23 @@ function AppContent() {
       selectionEnd: note.content.length,
     };
   }, []);
+
+  const handleRestoreNoteVersion = useCallback(
+    async (version: NoteVersion) => {
+      const current = getAiEditorSnapshot();
+      if (!current || current.noteId !== version.noteId) {
+        throw new Error("当前笔记已切换，无法恢复这个版本");
+      }
+      await saveNoteVersion(
+        { id: current.noteId, title: current.title, content: current.content },
+        "restore"
+      );
+      editorRef.current?.applySnapshot(version.title, version.content);
+      updateNote(current.noteId, { title: version.title, content: version.content });
+      showToast("历史版本已恢复，恢复前内容也已保存", "success");
+    },
+    [getAiEditorSnapshot, saveNoteVersion, showToast, updateNote]
+  );
 
   const getAiNoteContext = useCallback(
     (mode: AiNoteContextMode): AiNoteContext | null => {
@@ -956,6 +993,7 @@ function AppContent() {
             viewMode={viewMode}
             onViewModeChange={handleViewModeChange}
             onToggleSettings={handleToggleSettings}
+            onOpenHistory={handleOpenNoteHistory}
             onOpenQrCode={() => setShowQrDialog(true)}
             onGoHome={handleGoHome}
             focusMode={settings.focusMode}
@@ -1141,6 +1179,13 @@ function AppContent() {
         url={mobileOpenUrl}
         hasCurrentNote={viewMode !== "home" && Boolean(currentNoteId)}
         onClose={() => setShowQrDialog(false)}
+      />
+      <NoteHistoryDialog
+        open={showNoteHistory}
+        note={currentNote}
+        onClose={() => setShowNoteHistory(false)}
+        onRestore={handleRestoreNoteVersion}
+        onDeleteVersion={deleteNoteVersion}
       />
     </>
   );

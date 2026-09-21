@@ -1,13 +1,15 @@
-import type { Note, Folder, Theme, StorageData, NoteTemplate, AiChat } from "@types";
+import type { Note, Folder, Theme, StorageData, NoteTemplate, AiChat, NoteVersion } from "@types";
+import { NOTE_VERSION_BYTE_LIMIT, selectNoteVersionIdsToPrune } from "@utils/noteVersion";
 
 const DB_NAME = "markdown-notes-db";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NOTES = "notes";
 const STORE_FOLDERS = "folders";
 const STORE_SETTINGS = "settings";
 const STORE_FILES = "files";
 const STORE_TEMPLATES = "templates";
 const STORE_AI_CHATS = "ai_chats";
+const STORE_NOTE_VERSIONS = "note_versions";
 
 let dbInstance: IDBDatabase | null = null;
 
@@ -47,6 +49,12 @@ function openDB(): Promise<IDBDatabase> {
         const chatStore = db.createObjectStore(STORE_AI_CHATS, { keyPath: "id" });
         chatStore.createIndex("updatedAt", "updatedAt", { unique: false });
       }
+
+      if (!db.objectStoreNames.contains(STORE_NOTE_VERSIONS)) {
+        const versionStore = db.createObjectStore(STORE_NOTE_VERSIONS, { keyPath: "id" });
+        versionStore.createIndex("noteId", "noteId", { unique: false });
+        versionStore.createIndex("createdAt", "createdAt", { unique: false });
+      }
     };
 
     request.onsuccess = () => {
@@ -54,10 +62,15 @@ function openDB(): Promise<IDBDatabase> {
       dbInstance.onclose = () => {
         dbInstance = null;
       };
+      dbInstance.onversionchange = () => {
+        dbInstance?.close();
+        dbInstance = null;
+      };
       resolve(dbInstance);
     };
 
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("数据库升级被其他标签页阻止，请关闭旧标签页后重试"));
   });
 }
 
@@ -107,6 +120,40 @@ export async function idbSaveNote(note: Note): Promise<void> {
 
 export async function idbDeleteNote(id: string): Promise<void> {
   await tx<undefined>(STORE_NOTES, "readwrite", s => s.delete(id));
+}
+
+export async function idbGetNoteVersions(noteId: string): Promise<NoteVersion[]> {
+  const versions = await tx<NoteVersion[]>(STORE_NOTE_VERSIONS, "readonly", store =>
+    store.index("noteId").getAll(noteId)
+  );
+  return (versions || []).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function idbGetAllNoteVersions(): Promise<NoteVersion[]> {
+  return tx<NoteVersion[]>(STORE_NOTE_VERSIONS, "readonly", store => store.getAll());
+}
+
+export async function idbSaveNoteVersion(version: NoteVersion): Promise<void> {
+  await tx(STORE_NOTE_VERSIONS, "readwrite", store => store.put(version));
+}
+
+export async function idbDeleteNoteVersion(id: string): Promise<void> {
+  await tx<undefined>(STORE_NOTE_VERSIONS, "readwrite", store => store.delete(id));
+}
+
+export async function idbDeleteNoteVersions(noteId: string): Promise<void> {
+  const versions = await idbGetNoteVersions(noteId);
+  await Promise.all(versions.map(version => idbDeleteNoteVersion(version.id)));
+}
+
+export async function idbPruneNoteVersions(
+  noteId: string,
+  maxVersions = 50,
+  maxBytes = NOTE_VERSION_BYTE_LIMIT
+): Promise<void> {
+  const versions = await idbGetNoteVersions(noteId);
+  const ids = selectNoteVersionIdsToPrune(versions, maxVersions, maxBytes);
+  await Promise.all(ids.map(id => idbDeleteNoteVersion(id)));
 }
 
 export async function idbSaveAllNotes(notes: Note[]): Promise<void> {
@@ -309,6 +356,7 @@ export interface ReplaceAllDataPayload {
   templates: NoteTemplate[];
   aiChats: AiChat[];
   files: StoredFileRecord[];
+  noteVersions: NoteVersion[];
 }
 
 export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise<void> {
@@ -316,7 +364,15 @@ export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise
 
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(
-      [STORE_NOTES, STORE_FOLDERS, STORE_SETTINGS, STORE_TEMPLATES, STORE_AI_CHATS, STORE_FILES],
+      [
+        STORE_NOTES,
+        STORE_FOLDERS,
+        STORE_SETTINGS,
+        STORE_TEMPLATES,
+        STORE_AI_CHATS,
+        STORE_FILES,
+        STORE_NOTE_VERSIONS,
+      ],
       "readwrite"
     );
 
@@ -348,6 +404,10 @@ export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise
       const filesStore = transaction.objectStore(STORE_FILES);
       report(filesStore.clear());
       for (const file of payload.files) report(filesStore.put(file));
+
+      const versionsStore = transaction.objectStore(STORE_NOTE_VERSIONS);
+      report(versionsStore.clear());
+      for (const version of payload.noteVersions) report(versionsStore.put(version));
     } catch (error) {
       reject(error instanceof Error ? error : new Error(String(error)));
       return;
