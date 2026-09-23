@@ -156,6 +156,38 @@ export async function idbPruneNoteVersions(
   await Promise.all(ids.map(id => idbDeleteNoteVersion(id)));
 }
 
+export async function idbPurgeNotes(noteIds: string[]): Promise<void> {
+  if (noteIds.length === 0) return;
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(
+      [STORE_NOTES, STORE_FILES, STORE_NOTE_VERSIONS],
+      "readwrite"
+    );
+    const notesStore = transaction.objectStore(STORE_NOTES);
+    const filesIndex = transaction.objectStore(STORE_FILES).index("noteId");
+    const versionsIndex = transaction.objectStore(STORE_NOTE_VERSIONS).index("noteId");
+
+    for (const noteId of noteIds) {
+      notesStore.delete(noteId);
+      for (const index of [filesIndex, versionsIndex]) {
+        const cursorRequest = index.openCursor(IDBKeyRange.only(noteId));
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          cursor.delete();
+          cursor.continue();
+        };
+        cursorRequest.onerror = () => transaction.abort();
+      }
+    }
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error ?? new Error("永久删除事务已中止"));
+  });
+}
+
 export async function idbSaveAllNotes(notes: Note[]): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {

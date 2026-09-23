@@ -7,8 +7,8 @@ interface TrashViewProps {
   onClose: () => void;
   notes: Note[];
   onRestore: (id: string) => void;
-  onPurge: (id: string) => void;
-  onEmptyTrash: () => void;
+  onPurge: (id: string) => void | Promise<void>;
+  onEmptyTrash: () => void | Promise<void>;
 }
 
 function relDeleteTime(ts: number): string {
@@ -217,7 +217,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                 <span className="text-[11px] text-destructive font-medium">确认清空？不可恢复</span>
                 <button
                   onClick={() => {
-                    onEmptyTrash();
+                    void onEmptyTrash();
                     setConfirmEmpty(false);
                   }}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
@@ -266,7 +266,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
               </button>
               <button
                 onClick={() => {
-                  onPurge(purgeTarget);
+                  void onPurge(purgeTarget);
                   setPurgeTarget(null);
                 }}
                 className="px-3.5 py-2 rounded-xl text-xs font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"

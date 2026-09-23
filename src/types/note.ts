@@ -45,7 +45,7 @@ export interface Folder {
 
 export type Theme = "light" | "dark" | "black-rainbow";
 
-export type SaveStatus = "saved" | "saving" | "retrying" | "error";
+export type SaveStatus = "saved" | "dirty" | "saving" | "retrying" | "error";
 
 export interface StorageData {
   notes: Note[];

@@ -62,7 +62,7 @@ function ToolbarBase({
         exportAsText(currentNote!);
         break;
       case "pdf":
-        exportAsPDF();
+        void exportAsPDF(currentNote!);
         break;
     }
 

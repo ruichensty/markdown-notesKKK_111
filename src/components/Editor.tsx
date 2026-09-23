@@ -9,7 +9,8 @@ import React, {
 import type { AiEditorSnapshot, Note } from "@types";
 import { useDebounce, useTypingSound } from "@hooks";
 import { generateId } from "@utils/export";
-import { idbSaveFile } from "@utils/indexedDBStorage";
+import { idbDeleteFile, idbSaveFile } from "@utils/indexedDBStorage";
+import { validateDocumentImage } from "@utils/documentImage";
 import { SearchReplace } from "./SearchReplace";
 import { EditorToolbar } from "./EditorToolbar";
 import { getFontStack } from "../constants/fonts";
@@ -36,6 +37,7 @@ interface EditorProps {
       uploadedAt: number;
     }
   ) => void;
+  onAttachmentError?: (message: string) => void;
 }
 
 export interface EditorHandle {
@@ -96,6 +98,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     isMobile = false,
     typingSound = false,
     onAttachmentAdd,
+    onAttachmentError,
   },
   ref
 ) {
@@ -264,68 +267,58 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [setDraftContent]
   );
 
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
-      if (files.length === 0) return;
-
-      e.preventDefault();
-      for (const file of files) {
-        const attachmentId = generateId();
-        const targetNoteId = note.id;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, targetNoteId, arrayBuffer, file.name, file.type).then(() => {
-            const marker = `![${file.name}](attachment://${attachmentId})`;
-            if (noteIdRef.current === targetNoteId) {
-              insertImageMarker(marker);
-            }
-            onAttachmentAdd?.(targetNoteId, {
-              id: attachmentId,
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: arrayBuffer.byteLength,
-              uploadedAt: Date.now(),
-            });
-          });
-        };
-        reader.readAsArrayBuffer(file);
+  const attachImageFile = useCallback(
+    async (file: File, targetNoteId: string) => {
+      const attachmentId = generateId();
+      let stored = false;
+      try {
+        await validateDocumentImage(file);
+        if (noteIdRef.current !== targetNoteId) return;
+        const arrayBuffer = await file.arrayBuffer();
+        await idbSaveFile(attachmentId, targetNoteId, arrayBuffer, file.name, file.type);
+        stored = true;
+        if (noteIdRef.current !== targetNoteId) {
+          await idbDeleteFile(attachmentId);
+          return;
+        }
+        const safeName = file.name.replace(/[\]\r\n]/g, "_");
+        insertImageMarker(`![${safeName}](attachment://${attachmentId})`);
+        onAttachmentAdd?.(targetNoteId, {
+          id: attachmentId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: arrayBuffer.byteLength,
+          uploadedAt: Date.now(),
+        });
+      } catch (error) {
+        if (stored) await idbDeleteFile(attachmentId).catch(() => {});
+        onAttachmentError?.(error instanceof Error ? error.message : "图片附件处理失败");
       }
     },
-    [insertImageMarker, onAttachmentAdd, note.id]
+    [insertImageMarker, onAttachmentAdd, onAttachmentError]
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.clipboardData.files).filter(file =>
+        file.type.startsWith("image/")
+      );
+      if (files.length === 0) return;
+      e.preventDefault();
+      for (const file of files) void attachImageFile(file, note.id);
+    },
+    [attachImageFile, note.id]
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLTextAreaElement>) => {
-      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+      const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith("image/"));
       if (files.length === 0) return;
 
       e.preventDefault();
-      for (const file of files) {
-        const attachmentId = generateId();
-        const targetNoteId = note.id;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const arrayBuffer = reader.result as ArrayBuffer;
-          idbSaveFile(attachmentId, targetNoteId, arrayBuffer, file.name, file.type).then(() => {
-            const marker = `![${file.name}](attachment://${attachmentId})`;
-            if (noteIdRef.current === targetNoteId) {
-              insertImageMarker(marker);
-            }
-            onAttachmentAdd?.(targetNoteId, {
-              id: attachmentId,
-              fileName: file.name,
-              fileType: file.type,
-              fileSize: arrayBuffer.byteLength,
-              uploadedAt: Date.now(),
-            });
-          });
-        };
-        reader.readAsArrayBuffer(file);
-      }
+      for (const file of files) void attachImageFile(file, note.id);
     },
-    [insertImageMarker, onAttachmentAdd, note.id]
+    [attachImageFile, note.id]
   );
 
   const wrapSelection = useCallback(

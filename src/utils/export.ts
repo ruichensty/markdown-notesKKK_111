@@ -130,47 +130,45 @@ export async function exportAsMarkdown(note: Note): Promise<void> {
 
 const MERMAID_BLOCK_PATTERN = /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g;
 
-export async function exportAsHTML(note: Note): Promise<void> {
-  try {
-    const filename = sanitizeFilename(note.title);
-    const inlinedContent = await inlineAttachments(note.content);
-    let htmlBody = String(marked.parse(inlinedContent));
+export async function buildExportHtml(note: Note): Promise<string> {
+  const inlinedContent = await inlineAttachments(note.content);
+  let htmlBody = String(marked.parse(inlinedContent));
 
-    let hasMermaid = false;
-    htmlBody = htmlBody.replace(MERMAID_BLOCK_PATTERN, (_, diagram: string) => {
-      hasMermaid = true;
-      return `<pre class="mermaid">${diagram}</pre>`;
-    });
+  let hasMermaid = false;
+  htmlBody = htmlBody.replace(MERMAID_BLOCK_PATTERN, (_, diagram: string) => {
+    hasMermaid = true;
+    return `<pre class="mermaid">${diagram}</pre>`;
+  });
 
-    const hasMath = htmlBody.includes("katex");
+  const hasMath = htmlBody.includes("katex");
 
-    htmlBody = DOMPurify.sanitize(htmlBody, {
-      ADD_TAGS: ["annotation"],
-      ADD_ATTR: ["encoding"],
-    });
+  htmlBody = DOMPurify.sanitize(htmlBody, {
+    ADD_TAGS: ["annotation"],
+    ADD_ATTR: ["encoding"],
+  });
 
-    const extraHead = [
-      hasMath
-        ? `  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css">`
-        : "",
-      hasMath
-        ? `  <style>.math-block { text-align: center; margin: 16px 0; overflow-x: auto; }</style>`
-        : "",
-      hasMermaid
-        ? `  <style>.mermaid { display: flex; justify-content: center; margin: 16px 0; }</style>`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+  const extraHead = [
+    hasMath
+      ? `  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/katex.min.css">`
+      : "",
+    hasMath
+      ? `  <style>.math-block { text-align: center; margin: 16px 0; overflow-x: auto; }</style>`
+      : "",
+    hasMermaid
+      ? `  <style>.mermaid { display: flex; justify-content: center; margin: 16px 0; }</style>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-    const mermaidScript = hasMermaid
-      ? `\n<script type="module">
+  const mermaidScript = hasMermaid
+    ? `\n<script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, securityLevel: "strict" });
   </script>`
-      : "";
+    : "";
 
-    const html = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -202,6 +200,13 @@ ${extraHead}
   <div>${htmlBody}</div>${mermaidScript}
 </body>
 </html>`;
+  return html;
+}
+
+export async function exportAsHTML(note: Note): Promise<void> {
+  try {
+    const filename = sanitizeFilename(note.title);
+    const html = await buildExportHtml(note);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     downloadBlob(blob, `${filename}.html`);
   } catch (error) {
@@ -222,8 +227,34 @@ export function exportAsText(note: Note): void {
   }
 }
 
-export function exportAsPDF(): void {
-  window.print();
+export async function exportAsPDF(note: Note): Promise<void> {
+  const printWindow = window.open("", "_blank", "width=960,height=720");
+  if (!printWindow) throw new Error("浏览器阻止了打印窗口，请允许弹出窗口后重试");
+  printWindow.opener = null;
+  printWindow.document.write(
+    '<!doctype html><html><head><meta charset="utf-8"><title>Preparing document…</title></head><body>正在准备打印文档…</body></html>'
+  );
+  printWindow.document.close();
+
+  try {
+    const html = await buildExportHtml(note);
+    printWindow.addEventListener(
+      "load",
+      () => {
+        window.setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+        }, 400);
+      },
+      { once: true }
+    );
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  } catch (error) {
+    printWindow.close();
+    throw error;
+  }
 }
 
 export function sortNotes<T extends { order?: number | null; updatedAt?: number }>(

@@ -165,6 +165,7 @@ function AppContent() {
     saveStatus,
     retrySave,
     saveNow,
+    saveEditorSnapshotNow,
     saveNoteVersion,
     deleteNoteVersion,
     versionSaveError,
@@ -173,7 +174,7 @@ function AppContent() {
     restoreNote,
     purgeNote,
     emptyTrash,
-  } = useNotes(null);
+  } = useNotes(null, settings.autoSave);
 
   const {
     folders,
@@ -448,8 +449,17 @@ function AppContent() {
       const note = currentNoteRef.current;
       if (!tpl || !note) return;
 
-      const applied = applyTemplateVariables(tpl.content, note.title || "Untitled");
-      const newContent = note.content ? note.content + "\n\n" + applied : applied;
+      const editorSnapshot = editorRef.current?.getSnapshot();
+      const source = editorSnapshot?.noteId === note.id ? editorSnapshot : null;
+      const title = source?.title || note.title || "Untitled";
+      const content = source?.content ?? note.content;
+      const applied = applyTemplateVariables(tpl.content, title);
+      const separator = content ? (content.endsWith("\n") ? "\n" : "\n\n") : "";
+      const insertStart = content.length + separator.length;
+      const newContent = content + separator + applied;
+      if (source) {
+        editorRef.current?.applyContent(newContent, insertStart, newContent.length);
+      }
       updateNote(note.id, { content: newContent });
       showToast(`已插入模板「${tpl.name}」`, "success");
     },
@@ -573,17 +583,25 @@ function AppContent() {
   );
 
   const handlePurgeFromTrash = useCallback(
-    (id: string) => {
-      purgeNote(id);
-      showToast("已永久删除", "success");
+    async (id: string) => {
+      try {
+        await purgeNote(id);
+        showToast("已永久删除", "success");
+      } catch (error) {
+        handleStorageError(error as Error);
+      }
     },
-    [purgeNote, showToast]
+    [handleStorageError, purgeNote, showToast]
   );
 
-  const handleEmptyTrash = useCallback(() => {
-    emptyTrash();
-    showToast("回收站已清空", "success");
-  }, [emptyTrash, showToast]);
+  const handleEmptyTrash = useCallback(async () => {
+    try {
+      await emptyTrash();
+      showToast("回收站已清空", "success");
+    } catch (error) {
+      handleStorageError(error as Error);
+    }
+  }, [emptyTrash, handleStorageError, showToast]);
 
   const handleExpandedFoldersChange = useCallback(
     (ids: string[]) => {
@@ -605,12 +623,32 @@ function AppContent() {
   }, [updateSettings, settings.typewriterMode]);
 
   const handleEditorSave = useCallback(() => {
-    void saveNow()
+    const snapshot = editorRef.current?.getSnapshot();
+    const save = snapshot ? saveEditorSnapshotNow(snapshot) : saveNow();
+    void save
       .then(saved => {
         if (saved) showToast("笔记已保存", "success");
       })
       .catch(() => {});
-  }, [saveNow, showToast]);
+  }, [saveEditorSnapshotNow, saveNow, showToast]);
+
+  useEffect(() => {
+    if (!settings.autoSave) return;
+    const flushLatestDraft = () => {
+      const snapshot = editorRef.current?.getSnapshot();
+      if (snapshot) void saveEditorSnapshotNow(snapshot).catch(() => {});
+      else void saveNow().catch(() => {});
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flushLatestDraft();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", flushLatestDraft);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", flushLatestDraft);
+    };
+  }, [saveEditorSnapshotNow, saveNow, settings.autoSave]);
 
   const handleDoodleClear = useCallback(() => {
     showToast("涂鸦已清除", "success");
@@ -766,6 +804,11 @@ function AppContent() {
       });
     },
     [allNotes, updateNote]
+  );
+
+  const handleAttachmentError = useCallback(
+    (message: string) => showToast(message, "error", 5000),
+    [showToast]
   );
 
   const handleNoteDelete = useCallback(
@@ -1041,6 +1084,7 @@ function AppContent() {
                       isMobile={isMobile}
                       typingSound={settings.typingSound}
                       onAttachmentAdd={handleAttachmentAdd}
+                      onAttachmentError={handleAttachmentError}
                     />
                   </div>
                 )}

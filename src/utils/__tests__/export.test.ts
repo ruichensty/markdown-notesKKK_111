@@ -5,10 +5,11 @@ import {
   sortNotes,
   generateId,
   formatDate,
+  buildExportHtml,
 } from "../export";
 
 describe("escapeHtml", () => {
-  it("转义 & < > \" 四种危险字符", () => {
+  it('转义 & < > " 四种危险字符', () => {
     expect(escapeHtml(`<script>&"`)).toBe("&lt;script&gt;&amp;&quot;");
   });
 
@@ -18,6 +19,21 @@ describe("escapeHtml", () => {
 
   it("处理空字符串", () => {
     expect(escapeHtml("")).toBe("");
+  });
+});
+
+describe("standalone HTML export", () => {
+  it("sanitizes raw HTML while preserving document content", async () => {
+    const html = await buildExportHtml({
+      id: "note-1",
+      title: "导出标题",
+      content: "正文<script>alert(1)</script>",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    expect(html).toContain("导出标题");
+    expect(html).toContain("正文");
+    expect(html).not.toContain("alert(1)");
   });
 });
 

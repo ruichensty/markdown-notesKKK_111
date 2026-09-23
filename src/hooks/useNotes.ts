@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import type { Note, NoteFormData, NoteVersionSource, SaveStatus } from "@types";
+import type { AiEditorSnapshot, Note, NoteFormData, NoteVersionSource, SaveStatus } from "@types";
 import { generateId, formatDate } from "@utils/export";
 import { saveSingleNote, deleteSingleNote, loadNotes, loadSingleNote } from "@utils/storage";
 import {
-  idbDeleteFile,
   idbDeleteNoteVersion,
-  idbDeleteNoteVersions,
   idbGetNoteVersions,
   idbPruneNoteVersions,
   idbSaveNoteVersion,
+  idbPurgeNotes,
 } from "@utils/indexedDBStorage";
 import { invalidateAllDataCache } from "@utils/storage";
 import { diffNotes } from "@utils/noteDiff";
@@ -35,7 +34,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
-export function useNotes(selectedFolderId: string | null = null) {
+export function useNotes(selectedFolderId: string | null = null, autoSave = true) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
@@ -50,6 +49,7 @@ export function useNotes(selectedFolderId: string | null = null) {
   const lastVersionAtRef = useRef(new Map<string, number | null>());
   const [versionSaveError, setVersionSaveError] = useState<Error | null>(null);
   const versionRetryRef = useRef<(() => Promise<void>) | null>(null);
+  const markPending = useCallback(() => setSaveStatus("dirty"), []);
 
   const saveNoteVersion = useCallback(
     async (
@@ -239,7 +239,7 @@ export function useNotes(selectedFolderId: string | null = null) {
   }, [notesMap, currentNoteId]);
 
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || !autoSave) return;
 
     const timeoutId = window.setTimeout(() => {
       const snapshot = notes;
@@ -252,7 +252,7 @@ export function useNotes(selectedFolderId: string | null = null) {
     }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [notes, loaded, persistChanges]);
+  }, [notes, loaded, autoSave, persistChanges]);
 
   const retrySave = useCallback(() => {
     if (!loaded) return;
@@ -269,6 +269,7 @@ export function useNotes(selectedFolderId: string | null = null) {
   const saveNow = useCallback(async (): Promise<boolean> => {
     if (!loaded) return false;
 
+    setSaveStatus("saving");
     const snapshot = notesRef.current;
     const previousNotes = prevNotesRef.current;
     let saved = false;
@@ -278,26 +279,62 @@ export function useNotes(selectedFolderId: string | null = null) {
         saved = await persistChanges(snapshot, previousNotes);
       });
     await saveQueueRef.current;
+    if (!saved) setSaveStatus("saved");
     return saved;
   }, [loaded, persistChanges]);
 
-  const createNote = useCallback((data: NoteFormData): Note => {
-    const newNote: Note = {
-      id: generateId(),
-      title: data.title || "Untitled",
-      content: data.content || "",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      folderIds: data.folderIds || [],
-      attachments: [],
-    };
-    setNotes(prev => [newNote, ...prev]);
-    setCurrentNoteId(newNote.id);
-    return newNote;
-  }, []);
+  const saveEditorSnapshotNow = useCallback(
+    async (snapshot: AiEditorSnapshot): Promise<boolean> => {
+      if (!loaded) return false;
+      const existing = notesRef.current.find(note => note.id === snapshot.noteId);
+      if (!existing) return false;
+      if (existing.title === snapshot.title && existing.content === snapshot.content) {
+        return saveNow();
+      }
+      setSaveStatus("saving");
+      const updated: Note = {
+        ...existing,
+        title: snapshot.title,
+        content: snapshot.content,
+        updatedAt: Date.now(),
+      };
+      const next = notesRef.current.map(note => (note.id === updated.id ? updated : note));
+      notesRef.current = next;
+      setNotes(next);
+      let saved = false;
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          saved = await persistChanges(next, prevNotesRef.current);
+        });
+      await saveQueueRef.current;
+      return saved;
+    },
+    [loaded, persistChanges, saveNow]
+  );
+
+  const createNote = useCallback(
+    (data: NoteFormData): Note => {
+      const newNote: Note = {
+        id: generateId(),
+        title: data.title || "Untitled",
+        content: data.content || "",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        folderIds: data.folderIds || [],
+        attachments: [],
+      };
+      markPending();
+      setNotes(prev => [newNote, ...prev]);
+      setCurrentNoteId(newNote.id);
+      return newNote;
+    },
+    [markPending]
+  );
 
   const updateNote = useCallback(
     (id: string, data: Partial<NoteFormData & { attachments?: Note["attachments"] }>): void => {
+      markPending();
       setNotes(prev =>
         prev.map(note =>
           note.id === id
@@ -310,48 +347,56 @@ export function useNotes(selectedFolderId: string | null = null) {
         )
       );
     },
-    []
+    [markPending]
   );
 
-  const deleteNote = useCallback((id: string): void => {
-    setNotes(prev => {
-      const next = prev.map(note =>
-        note.id === id ? { ...note, deletedAt: Date.now(), updatedAt: Date.now() } : note
-      );
-      if (currentNoteIdRef.current === id) {
-        const remaining = next.filter(n => n.id !== id && !n.deletedAt);
-        setCurrentNoteId(remaining.length > 0 ? remaining[0].id : null);
-      }
-      return next;
-    });
-  }, []);
-
-  const restoreNote = useCallback((id: string): void => {
-    setNotes(prev =>
-      prev.map(note => {
-        if (note.id !== id) return note;
-        const rest = { ...note };
-        delete rest.deletedAt;
-        return { ...rest, updatedAt: Date.now() };
-      })
-    );
-  }, []);
-
-  const purgeNote = useCallback((id: string): void => {
-    setNotes(prev => {
-      const note = prev.find(n => n.id === id);
-      if (note?.attachments) {
-        for (const att of note.attachments) {
-          idbDeleteFile(att.id).catch(() => {});
+  const deleteNote = useCallback(
+    (id: string): void => {
+      markPending();
+      setNotes(prev => {
+        const next = prev.map(note =>
+          note.id === id ? { ...note, deletedAt: Date.now(), updatedAt: Date.now() } : note
+        );
+        if (currentNoteIdRef.current === id) {
+          const remaining = next.filter(n => n.id !== id && !n.deletedAt);
+          setCurrentNoteId(remaining.length > 0 ? remaining[0].id : null);
         }
-      }
-      void idbDeleteNoteVersions(id)
-        .then(() => publishCrossTabChange("note-versions"))
-        .catch(() => {});
+        return next;
+      });
+    },
+    [markPending]
+  );
+
+  const restoreNote = useCallback(
+    (id: string): void => {
+      markPending();
+      setNotes(prev =>
+        prev.map(note => {
+          if (note.id !== id) return note;
+          const rest = { ...note };
+          delete rest.deletedAt;
+          return { ...rest, updatedAt: Date.now() };
+        })
+      );
+    },
+    [markPending]
+  );
+
+  const purgeNote = useCallback(
+    async (id: string): Promise<void> => {
+      await idbPurgeNotes([id]);
+      setNotes(prev => {
+        const next = prev.filter(note => note.id !== id);
+        notesRef.current = next;
+        return next;
+      });
+      prevNotesRef.current = prevNotesRef.current.filter(note => note.id !== id);
       lastVersionAtRef.current.delete(id);
-      return prev.filter(n => n.id !== id);
-    });
-  }, []);
+      broadcastNotesChanged(id);
+      publishCrossTabChange("note-versions");
+    },
+    [broadcastNotesChanged]
+  );
 
   const deleteNoteVersion = useCallback(async (noteId: string, versionId: string) => {
     await idbDeleteNoteVersion(versionId);
@@ -368,23 +413,18 @@ export function useNotes(selectedFolderId: string | null = null) {
     });
   }, []);
 
-  const emptyTrash = useCallback((): void => {
-    setNotes(prev => {
-      for (const note of prev) {
-        if (!note.deletedAt) continue;
-        if (note.attachments) {
-          for (const att of note.attachments) {
-            idbDeleteFile(att.id).catch(() => {});
-          }
-        }
-        void idbDeleteNoteVersions(note.id)
-          .then(() => publishCrossTabChange("note-versions"))
-          .catch(() => {});
-        lastVersionAtRef.current.delete(note.id);
-      }
-      return prev.filter(n => !n.deletedAt);
-    });
-  }, []);
+  const emptyTrash = useCallback(async (): Promise<void> => {
+    const trashedIds = notesRef.current.filter(note => note.deletedAt).map(note => note.id);
+    await idbPurgeNotes(trashedIds);
+    const next = notesRef.current.filter(note => !note.deletedAt);
+    notesRef.current = next;
+    setNotes(next);
+    const removed = new Set(trashedIds);
+    prevNotesRef.current = prevNotesRef.current.filter(note => !removed.has(note.id));
+    for (const id of trashedIds) lastVersionAtRef.current.delete(id);
+    broadcastNotesChanged();
+    publishCrossTabChange("note-versions");
+  }, [broadcastNotesChanged]);
 
   const getFormattedDate = useCallback(
     (id: string): string => {
@@ -394,44 +434,52 @@ export function useNotes(selectedFolderId: string | null = null) {
     [notesMap]
   );
 
-  const reorderNotes = useCallback((activeId: string, overId: string) => {
-    setNotes(prev => {
-      const activeIndex = prev.findIndex(n => n.id === activeId);
-      const overIndex = prev.findIndex(n => n.id === overId);
-      if (activeIndex === -1 || overIndex === -1) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(activeIndex, 1);
-      next.splice(overIndex, 0, moved);
-      const now = Date.now();
-      return next.map((note, index) =>
-        note.order === index ? note : { ...note, order: index, updatedAt: now }
-      );
-    });
-  }, []);
-
-  const reorderNotesInFolder = useCallback((folderId: string, activeId: string, overId: string) => {
-    setNotes(prev => {
-      const inFolder = prev
-        .filter(n => Array.isArray(n.folderIds) && n.folderIds.includes(folderId))
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const activeIndex = inFolder.findIndex(n => n.id === activeId);
-      const overIndex = inFolder.findIndex(n => n.id === overId);
-      if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return prev;
-      const reordered = [...inFolder];
-      const [moved] = reordered.splice(activeIndex, 1);
-      reordered.splice(overIndex, 0, moved);
-
-      const orderMap = new Map<string, number>();
-      reordered.forEach((n, i) => orderMap.set(n.id, i));
-
-      const now = Date.now();
-      return prev.map(note => {
-        const nextOrder = orderMap.get(note.id);
-        if (nextOrder === undefined || note.order === nextOrder) return note;
-        return { ...note, order: nextOrder, updatedAt: now };
+  const reorderNotes = useCallback(
+    (activeId: string, overId: string) => {
+      markPending();
+      setNotes(prev => {
+        const activeIndex = prev.findIndex(n => n.id === activeId);
+        const overIndex = prev.findIndex(n => n.id === overId);
+        if (activeIndex === -1 || overIndex === -1) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(activeIndex, 1);
+        next.splice(overIndex, 0, moved);
+        const now = Date.now();
+        return next.map((note, index) =>
+          note.order === index ? note : { ...note, order: index, updatedAt: now }
+        );
       });
-    });
-  }, []);
+    },
+    [markPending]
+  );
+
+  const reorderNotesInFolder = useCallback(
+    (folderId: string, activeId: string, overId: string) => {
+      markPending();
+      setNotes(prev => {
+        const inFolder = prev
+          .filter(n => Array.isArray(n.folderIds) && n.folderIds.includes(folderId))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const activeIndex = inFolder.findIndex(n => n.id === activeId);
+        const overIndex = inFolder.findIndex(n => n.id === overId);
+        if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) return prev;
+        const reordered = [...inFolder];
+        const [moved] = reordered.splice(activeIndex, 1);
+        reordered.splice(overIndex, 0, moved);
+
+        const orderMap = new Map<string, number>();
+        reordered.forEach((n, i) => orderMap.set(n.id, i));
+
+        const now = Date.now();
+        return prev.map(note => {
+          const nextOrder = orderMap.get(note.id);
+          if (nextOrder === undefined || note.order === nextOrder) return note;
+          return { ...note, order: nextOrder, updatedAt: now };
+        });
+      });
+    },
+    [markPending]
+  );
 
   return {
     notes: filteredNotes,
@@ -455,6 +503,7 @@ export function useNotes(selectedFolderId: string | null = null) {
     clearSaveError: useCallback(() => setSaveError(false), []),
     retrySave,
     saveNow,
+    saveEditorSnapshotNow,
     saveNoteVersion,
     deleteNoteVersion,
     versionSaveError,

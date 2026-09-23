@@ -43,6 +43,7 @@ interface StatusBarProps {
 
 const saveStatusLabel: Record<SaveStatus, string> = {
   saved: "已保存",
+  dirty: "未保存",
   saving: "保存中...",
   retrying: "重试保存...",
   error: "保存失败",
