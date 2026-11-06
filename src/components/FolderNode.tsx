@@ -92,7 +92,11 @@ export const FolderNode = memo(function FolderNode({
     listeners,
     setNodeRef: setDragRef,
     isDragging,
-  } = useDraggable({ id: `folder-drag-${folder.id}`, data: { type: "folder", folder } });
+  } = useDraggable({
+    id: `folder-drag-${folder.id}`,
+    data: { type: "folder", folder },
+    disabled: isRenaming || selectionMode,
+  });
 
   const renameInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,6 +263,7 @@ export const FolderNode = memo(function FolderNode({
         onContextMenu={handleFolderContextMenu}
         onKeyDown={e => {
           if (isRenaming) return;
+          if (e.target !== e.currentTarget) return;
           if (e.key === "Enter") {
             e.preventDefault();
             onToggleExpand(folder.id);
@@ -269,6 +274,8 @@ export const FolderNode = memo(function FolderNode({
         }}
         {...attributes}
         {...listeners}
+        aria-expanded={expanded}
+        aria-label={`文件夹「${folder.name}」`}
       >
         <svg
           className={`sidebar-folder-chevron ${expanded ? "sidebar-folder-chevron--open" : ""}`}
@@ -292,6 +299,8 @@ export const FolderNode = memo(function FolderNode({
             onChange={event => setRenameValue(event.target.value)}
             onBlur={handleRename}
             onKeyDown={event => {
+              event.stopPropagation();
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "Enter") handleRename();
               if (event.key === "Escape") {
                 setRenameValue(folder.name);
@@ -400,6 +409,7 @@ export const FolderNode = memo(function FolderNode({
 
       <div
         className={`sidebar-folder-children-wrapper ${expanded ? "sidebar-folder-children-wrapper--expanded" : ""}`}
+        inert={!expanded}
         style={{
           opacity: expanded ? 1 : 0,
           transform: expanded ? "translateY(0)" : "translateY(-4px)",
@@ -567,6 +577,7 @@ function SortableFolderNoteItem({
 }: SortableFolderNoteItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: note.id,
+    disabled: selectionMode,
   });
 
   const setRef = useCallback(

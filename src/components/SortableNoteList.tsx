@@ -37,7 +37,10 @@ function SortableNoteItem({
   onToggleSelect?: () => void;
   onContextMenu?: (note: Note) => ContextMenuItem[];
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: note.id });
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+    id: note.id,
+    disabled: selectionMode,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,

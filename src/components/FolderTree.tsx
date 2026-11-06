@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from "react";
 import type { Note } from "@types";
+import { sortNotes } from "@utils/export";
 import { FolderNode } from "./FolderNode";
 import { FolderTreeContext, type FolderTreeContextValue } from "./folderTreeContext";
 import { isFolderInSubtree, type FolderNodeData } from "@utils/folderTree";
@@ -65,6 +66,7 @@ function FolderTreeBase(props: FolderTreeProps) {
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focusablesRef = useRef<Map<string, HTMLElement>>(new Map());
+  const revealedNoteRef = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -115,6 +117,8 @@ function FolderTreeBase(props: FolderTreeProps) {
   }, [notes, activeNoteId, folders]);
 
   useEffect(() => {
+    if (revealedNoteRef.current === activeNoteId) return;
+    revealedNoteRef.current = activeNoteId;
     if (activeAncestorSet.size === 0) return;
     const missing = [...activeAncestorSet].filter(id => !expandedSet.has(id));
     if (missing.length === 0) return;
@@ -158,7 +162,7 @@ function FolderTreeBase(props: FolderTreeProps) {
         order.push(`folder:${f.id}`);
         if (expandedSet.has(f.id)) {
           if (f.children?.length) walk(f.children);
-          const fNotes = notesByFolder.get(f.id) || [];
+          const fNotes = sortNotes(notesByFolder.get(f.id) || []);
           fNotes.forEach(n => order.push(`note:${n.id}`));
         }
       }
@@ -176,6 +180,8 @@ function FolderTreeBase(props: FolderTreeProps) {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if ((e.target as HTMLElement).closest("input, textarea, button, [contenteditable=true]"))
+        return;
       if (focusedId === null) return;
       const idx = visibleFocusables.indexOf(focusedId);
       if (idx === -1) return;
@@ -361,6 +367,11 @@ function FolderTreeBase(props: FolderTreeProps) {
       data-dnd-context="true"
       onKeyDown={handleKeyDown}
       tabIndex={-1}
+      onFocusCapture={event => {
+        const id = (event.target as HTMLElement).closest<HTMLElement>("[data-focusable-id]")
+          ?.dataset.focusableId;
+        if (id) setFocusedId(id);
+      }}
     >
       <DndContext
         sensors={sensors}
@@ -368,6 +379,11 @@ function FolderTreeBase(props: FolderTreeProps) {
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => {
+          setDragState(null);
+          setHoveredFolderId(null);
+          if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+        }}
       >
         <FolderTreeContext.Provider value={contextValue}>
           {folders.map(folder => (

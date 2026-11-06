@@ -4457,6 +4457,33 @@
   }
 }
 
+.sidebar-item--selected {
+  background: hsl(var(--primary) / 0.12);
+  box-shadow: inset 3px 0 hsl(var(--primary));
+}
+
+.sidebar-folder-header:focus-within .sidebar-folder-actions,
+.sidebar-item:focus-within .sidebar-item-action {
+  opacity: 1;
+}
+
+.sidebar-folder-action-btn,
+.sidebar-item-action {
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.sidebar-item-action[hidden] {
+  display: none;
+}
+
+@media (hover: none) {
+  .sidebar-folder-actions,
+  .sidebar-item-action {
+    opacity: 1;
+  }
+}
+
 @media print {
   .usage-time-widget {
     display: none !important;

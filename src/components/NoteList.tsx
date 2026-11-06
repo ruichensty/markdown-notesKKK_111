@@ -13,6 +13,9 @@ import { sortNotes } from "@utils/export";
 import { searchNotes, type NoteSearchDateRange, type NoteSearchScope } from "@utils/noteSearch";
 import type { Note, Folder } from "@types";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
+import { sameNotes } from "./noteListComparison";
+import { createPortal } from "react-dom";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface NoteListProps {
   notes: Note[];
@@ -63,7 +66,7 @@ function NoteList({
   activeNoteId,
   onNoteSelect,
   onNewNote,
-  onNoteDelete,
+  onNoteDelete: deleteNote,
   onRemoveFolderFromNotes,
   onReorderNotes,
   searchInputRef,
@@ -96,6 +99,20 @@ function NoteList({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingRenameId, setPendingRenameId] = useState<string | null>(null);
+  const [deleteRequest, setDeleteRequest] = useState<{
+    message: string;
+    confirm: () => void;
+  } | null>(null);
+  const onNoteDelete = useCallback(
+    (id: string) => {
+      const title = notes.find(note => note.id === id)?.title || "未命名笔记";
+      setDeleteRequest({
+        message: `将「${title}」移入回收站？之后可以在回收站恢复。`,
+        confirm: () => deleteNote(id),
+      });
+    },
+    [notes, deleteNote]
+  );
 
   const { show: showContextMenu } = useContextMenu();
   const outlineContent = useMemo(
@@ -153,8 +170,14 @@ function NoteList({
   const handleDeleteFolder = useCallback(
     (id: string) => {
       const idsToDelete = collectFolderSubtreeIds(id, folders);
-      deleteFolder(id);
-      onRemoveFolderFromNotes?.(Array.from(idsToDelete));
+      const name = folders.find(folder => folder.id === id)?.name || "文件夹";
+      setDeleteRequest({
+        message: `删除文件夹「${name}」及其 ${idsToDelete.size - 1} 个子文件夹？笔记会保留，仅移除这些文件夹的归属。没有其他归属的笔记将显示在根目录。`,
+        confirm: () => {
+          deleteFolder(id);
+          onRemoveFolderFromNotes?.(Array.from(idsToDelete));
+        },
+      });
     },
     [folders, deleteFolder, onRemoveFolderFromNotes]
   );
@@ -218,13 +241,13 @@ function NoteList({
   }, []);
 
   useEffect(() => {
-    if (!selectionMode) return;
+    if (!selectionMode || deleteRequest) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") handleExitSelection();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [selectionMode, handleExitSelection]);
+  }, [selectionMode, deleteRequest, handleExitSelection]);
 
   const handleEnterSelection = useCallback(() => {
     setSelectionMode(true);
@@ -233,10 +256,17 @@ function NoteList({
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size > 0 && onBatchDelete) {
-      onBatchDelete(Array.from(selectedIds));
-      handleExitSelection();
+      const ids = Array.from(selectedIds).filter(id => notes.some(note => note.id === id));
+      if (!ids.length) return;
+      setDeleteRequest({
+        message: `将选中的 ${ids.length} 篇笔记移入回收站？之后可以在回收站恢复。`,
+        confirm: () => {
+          onBatchDelete(ids);
+          handleExitSelection();
+        },
+      });
     }
-  }, [selectedIds, onBatchDelete, handleExitSelection]);
+  }, [selectedIds, notes, onBatchDelete, handleExitSelection]);
 
   const handleBatchMoveRequest = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -553,6 +583,18 @@ function NoteList({
         )}
       </div>
 
+      {deleteRequest &&
+        createPortal(
+          <ConfirmDialog
+            message={deleteRequest.message}
+            onCancel={() => setDeleteRequest(null)}
+            onConfirm={() => {
+              deleteRequest.confirm();
+              setDeleteRequest(null);
+            }}
+          />,
+          document.body
+        )}
       {selectionMode && (
         <div className="batch-action-bar">
           <button onClick={handleSelectAll} className="batch-action-btn">
@@ -664,28 +706,9 @@ function NoteList({
   );
 }
 
-function sameNotes(a: Note[], b: Note[], activeNoteId: string | null): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i];
-    const y = b[i];
-    if (
-      x.id !== y.id ||
-      (x.id !== activeNoteId && x.updatedAt !== y.updatedAt) ||
-      x.title !== y.title ||
-      x.order !== y.order ||
-      x.deletedAt !== y.deletedAt
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 export default memo(NoteList, (prevProps, nextProps) => {
   return (
-    sameNotes(prevProps.notes, nextProps.notes, prevProps.activeNoteId) &&
+    sameNotes(prevProps.notes, nextProps.notes) &&
     prevProps.activeNoteId === nextProps.activeNoteId &&
     prevProps.getFormattedDate === nextProps.getFormattedDate &&
     prevProps.onNoteSelect === nextProps.onNoteSelect &&

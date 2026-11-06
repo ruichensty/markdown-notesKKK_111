@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useEffect, useCallback } from "react";
+import React, { memo, useCallback } from "react";
 import type { Note } from "@types";
 import { useContextMenu, type ContextMenuItem } from "@context/ContextMenuContext";
 
@@ -25,8 +25,6 @@ function NoteItem({
   onToggleSelect,
   onContextMenu,
 }: NoteItemProps) {
-  const [showConfirm, setShowConfirm] = useState(false);
-  const confirmRef = useRef<HTMLDivElement>(null);
   const { show } = useContextMenu();
 
   function recencyClass(timestamp?: number): string {
@@ -38,35 +36,13 @@ function NoteItem({
     return "sidebar-note--old";
   }
 
-  useEffect(() => {
-    if (!showConfirm) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) {
-        setShowConfirm(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showConfirm]);
-
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowConfirm(true);
-  }, []);
-
-  const handleConfirm = useCallback(
+  const handleDeleteClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       onDelete();
-      setShowConfirm(false);
     },
     [onDelete]
   );
-
-  const handleCancel = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowConfirm(false);
-  }, []);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -90,7 +66,16 @@ function NoteItem({
 
   return (
     <div
-      className={`sidebar-item group relative ${isActive ? "sidebar-item--active" : ""} ${recency}`}
+      className={`sidebar-item group relative ${isActive ? "sidebar-item--active" : ""} ${selectionMode && selected ? "sidebar-item--selected" : ""} ${recency}`}
+      onPointerDown={event => {
+        if (
+          selectionMode ||
+          (event.target as HTMLElement).closest(
+            "button.sidebar-item-action, button.sidebar-item-checkbox"
+          )
+        )
+          event.stopPropagation();
+      }}
       onContextMenu={handleContextMenu}
     >
       {selectionMode && (
@@ -158,7 +143,8 @@ function NoteItem({
         type="button"
         onClick={handleDeleteClick}
         className="sidebar-item-action opacity-0 group-hover:opacity-100"
-        title="Delete Note"
+        hidden={selectionMode}
+        title="移入回收站"
         aria-label={`删除笔记「${title}」`}
       >
         <svg
@@ -173,44 +159,11 @@ function NoteItem({
           <path d="M4 4l8 8M12 4l-8 8" />
         </svg>
       </button>
-
-      {showConfirm && (
-        <div
-          ref={confirmRef}
-          className="absolute left-1 top-full z-50 bg-popover border border-border rounded-lg shadow-xl p-2 min-w-[140px] animate-scale-in"
-          onClick={e => e.stopPropagation()}
-        >
-          <p className="text-[10px] text-muted-foreground mb-1.5 px-0.5">删除这条笔记？</p>
-          <div className="flex gap-1">
-            <button
-              onClick={handleCancel}
-              className="flex-1 px-2 py-1 text-[10px] rounded-md bg-muted text-muted-foreground hover:bg-muted/80 transition-colors font-medium"
-            >
-              取消
-            </button>
-            <button
-              onClick={handleConfirm}
-              className="flex-1 px-2 py-1 text-[10px] rounded-md bg-destructive text-white hover:bg-destructive/90 transition-colors font-medium"
-            >
-              删除
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export default memo(NoteItem, (prevProps, nextProps) => {
-  return (
-    prevProps.note.id === nextProps.note.id &&
-    prevProps.note.title === nextProps.note.title &&
-    prevProps.note.updatedAt === nextProps.note.updatedAt &&
-    prevProps.isActive === nextProps.isActive &&
-    prevProps.selectionMode === nextProps.selectionMode &&
-    prevProps.selected === nextProps.selected
-  );
-});
+export default memo(NoteItem);
 
 export { NoteItem };
 
