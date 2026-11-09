@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { NoteTemplate } from "@types";
 import { BUILTIN_TEMPLATES } from "@utils/template";
-import { idbGetAllTemplates, idbSaveTemplate, idbDeleteTemplate } from "@utils/indexedDBStorage";
+import { idbGetAllTemplates, idbSaveTemplate, idbDeleteTemplate } from "@/storage/libraryStorage";
 import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 
 export function useTemplates() {

@@ -14,7 +14,7 @@ import {
 } from "@utils/backup";
 import { validateAvatarImage } from "@utils/avatarImage";
 import { createAiUiThemeTemplateBlob, readAiUiThemeFile } from "@utils/aiUiTheme";
-import { idbUpdateSettingsAndAvatarFile } from "@utils/indexedDBStorage";
+import { idbUpdateSettingsAndAvatarFile } from "@/storage/libraryStorage";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";

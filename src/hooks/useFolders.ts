@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import type { Folder } from "@types";
-import { idbGetAllFolders, idbSaveAllFolders } from "@utils/indexedDBStorage";
+import { idbGetAllFolders, idbSaveAllFolders } from "@/storage/libraryStorage";
 import { getAllDataCache } from "@utils/storage";
 import { buildFolderTree, collectFolderSubtreeIds, type FolderNodeData } from "@utils/folderTree";
 import { useDebouncedPersistence } from "./useDebouncedPersistence";
@@ -9,6 +9,18 @@ import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabS
 export function useFolders() {
   const [folders, setFolders] = useState<Folder[]>(() => getAllDataCache()?.folders ?? []);
   const [loaded, setLoaded] = useState(() => !!getAllDataCache());
+  const [loadError, setLoadError] = useState(false);
+
+  const retryLoad = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const data = await idbGetAllFolders();
+      setFolders(data || []);
+      setLoaded(true);
+    } catch {
+      setLoadError(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (loaded) return;
@@ -19,7 +31,7 @@ export function useFolders() {
       })
       .catch(error => {
         console.error("Failed to load folders:", error);
-        setLoaded(true);
+        setLoadError(true);
       });
   }, [loaded]);
 
@@ -86,6 +98,9 @@ export function useFolders() {
 
   return {
     folders,
+    loaded,
+    loadError,
+    retryLoad,
     createFolder,
     updateFolder,
     deleteFolder,

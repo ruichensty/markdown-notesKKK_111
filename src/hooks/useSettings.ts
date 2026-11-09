@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { idbGetSetting, idbSetSetting } from "@utils/indexedDBStorage";
+import { idbGetSetting, idbSetSetting } from "@/storage/libraryStorage";
 import { parseAiUiTheme } from "@utils/aiUiTheme";
 import type { AiProviderId, AiUiStyle, AiUiThemePackage } from "@types";
 import type { AvatarAnimation, AvatarMode, AvatarSkin } from "@types";
@@ -117,15 +117,27 @@ function normalizeSettings(stored?: Partial<Settings>, pending: Partial<Settings
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [hydrated, setHydrated] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const pendingUpdatesRef = useRef<Partial<Settings>>({});
 
   useEffect(() => {
     idbGetSetting<Settings>(SETTINGS_KEY)
       .then(stored => {
         setSettings(normalizeSettings(stored, pendingUpdatesRef.current));
+        setHydrated(true);
       })
-      .catch(() => {})
-      .finally(() => setHydrated(true));
+      .catch(() => setLoadError(true));
+  }, []);
+
+  const retryLoad = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const stored = await idbGetSetting<Settings>(SETTINGS_KEY);
+      setSettings(normalizeSettings(stored, pendingUpdatesRef.current));
+      setHydrated(true);
+    } catch {
+      setLoadError(true);
+    }
   }, []);
 
   const updateSettings = useCallback(
@@ -162,6 +174,9 @@ export function useSettings() {
   return {
     settings,
     updateSettings,
+    loaded: hydrated,
+    loadError,
+    retryLoad,
     saveStatus: persistence.status,
     saveError: persistence.error,
     retrySave: persistence.retry,

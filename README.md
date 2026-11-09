@@ -32,6 +32,10 @@ pnpm preview
 
 ## 📦 可用脚本
 
+当前优先维护网页端，使用 Node.js 和 pnpm 即可开发、测试与构建，无需安装 Rust、C++ Build Tools 或 Windows SDK。笔记继续保存在当前浏览器的 IndexedDB 中，可通过备份导出、导入迁移。
+
+Tauri 桌面迁移暂时暂停，已有脚手架保留供后续使用。此前进度见 [桌面迁移说明](docs/desktop-migration.md)。
+
 | 命令                | 描述                 |
 | ------------------- | -------------------- |
 | `pnpm dev`          | 启动开发服务器       |

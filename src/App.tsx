@@ -54,6 +54,7 @@ import {
   deriveAiNoteTitle,
 } from "@utils/aiNoteActions";
 import { cleanupOrphanedFiles } from "@utils/storageMaintenance";
+import { useDesktopClose } from "@hooks/useDesktopClose";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
@@ -115,6 +116,9 @@ function AppContent() {
     updateSettings,
     saveError: settingsSaveError,
     retrySave: retrySettingsSave,
+    loaded: settingsLoaded,
+    loadError: settingsLoadError,
+    retryLoad: retrySettingsLoad,
     flush: flushSettings,
   } = useSettings();
   const { theme, toggleTheme } = useTheme();
@@ -161,6 +165,10 @@ function AppContent() {
     reorderNotesInFolder,
     getFormattedDate,
     loaded,
+    loadError,
+    conflictNoteId,
+    resolveConflict,
+    retryLoad,
     saveError,
     saveStatus,
     retrySave,
@@ -184,6 +192,9 @@ function AppContent() {
     updateFolder,
     saveError: folderSaveError,
     retrySave: retryFolderSave,
+    loaded: foldersLoaded,
+    loadError: foldersLoadError,
+    retryLoad: retryFoldersLoad,
     flush: flushFolders,
   } = useFolders();
 
@@ -280,6 +291,24 @@ function AppContent() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+  const handleResolveConflict = useCallback(
+    async (keepCopy: boolean) => {
+      setResolvingConflict(true);
+      try {
+        const snapshot = editorRef.current?.getSnapshot();
+        const result = await resolveConflict(keepCopy, snapshot);
+        if (snapshot?.noteId === conflictNoteId) {
+          editorRef.current?.acceptSavedSnapshot(result?.title ?? "", result?.content ?? "");
+        }
+      } catch (error) {
+        handleStorageError(error as Error);
+      } finally {
+        setResolvingConflict(false);
+      }
+    },
+    [conflictNoteId, handleStorageError, resolveConflict]
+  );
   const currentNoteRef = useRef<Note | null>(null);
   const [aiUndoPreview, setAiUndoPreview] = useState<AiNoteApplyPreview | null>(null);
 
@@ -288,6 +317,30 @@ function AppContent() {
     await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
     await Promise.all([saveNow(), flushSettings(), flushFolders()]);
   }, [flushFolders, flushSettings, saveNow]);
+
+  useDesktopClose(
+    async () => {
+      if (!loaded || !settingsLoaded || !foldersLoaded) {
+        return;
+      }
+      if (saveError) throw new Error("笔记保存失败，请先重试保存再关闭窗口");
+      if (conflictNoteId) throw new Error("请先处理笔记冲突，再关闭窗口");
+      const snapshot = editorRef.current?.getSnapshot();
+      if (
+        !settings.autoSave &&
+        (saveStatus === "dirty" ||
+          (snapshot &&
+            (snapshot.content !== currentNote?.content || snapshot.title !== currentNote?.title)))
+      ) {
+        throw new Error("自动保存已关闭，请先按 Ctrl+S 保存笔记后再关闭窗口");
+      }
+      if (snapshot && settings.autoSave) await saveEditorSnapshotNow(snapshot);
+      else if (settings.autoSave) await saveNow();
+      const results = await Promise.all([flushSettings(), flushFolders()]);
+      if (results.some(result => !result)) throw new Error("设置或文件夹保存失败，窗口保持打开");
+    },
+    error => showToast(error instanceof Error ? error.message : "关闭前保存失败", "error", 6000)
+  );
 
   useEffect(() => {
     currentNoteRef.current = currentNote;
@@ -964,12 +1017,57 @@ function AppContent() {
     },
   ]);
 
-  if (!loaded) {
+  if (!loaded || !settingsLoaded || !foldersLoaded) {
+    if (loadError || settingsLoadError || foldersLoadError) {
+      return (
+        <div
+          role="alert"
+          className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-background text-foreground"
+        >
+          <p>读取本地数据失败，已暂停编辑以保护数据。</p>
+          <button
+            type="button"
+            onClick={() => {
+              if (loadError) void retryLoad();
+              if (settingsLoadError) void retrySettingsLoad();
+              if (foldersLoadError) void retryFoldersLoad();
+            }}
+            className="rounded bg-primary px-4 py-2 text-primary-foreground"
+          >
+            重试读取
+          </button>
+        </div>
+      );
+    }
     return <LoadingScreen />;
   }
 
   return (
     <>
+      {conflictNoteId && (
+        <div
+          role="alert"
+          className="fixed bottom-6 left-1/2 z-[15000] -translate-x-1/2 rounded-xl border border-border bg-card p-4 shadow-xl"
+        >
+          <p className="mb-3 text-sm">另一标签页已更改这篇笔记。请选择要保留的内容。</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              disabled={resolvingConflict}
+              onClick={() => void handleResolveConflict(false)}
+            >
+              采用其他标签页版本
+            </button>
+            <button
+              type="button"
+              disabled={resolvingConflict}
+              onClick={() => void handleResolveConflict(true)}
+            >
+              将本地内容另存为副本
+            </button>
+          </div>
+        </div>
+      )}
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">
         {!settings.focusMode && !settings.typewriterMode && settings.particleEffects && (
           <Suspense fallback={null}>

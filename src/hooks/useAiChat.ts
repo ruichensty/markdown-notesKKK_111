@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiChat, AiChatMessage, AiNoteContext } from "@types";
-import { idbDeleteAiChat, idbGetAllAiChats, idbSaveAiChat } from "@utils/indexedDBStorage";
+import { idbDeleteAiChat, idbGetAllAiChats, idbSaveAiChat } from "@/storage/libraryStorage";
 import { AiClientError, buildContextMessages, streamAiCompletion } from "@utils/aiClient";
 import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 

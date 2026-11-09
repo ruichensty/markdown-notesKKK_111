@@ -10,10 +10,27 @@ if (!rootElement) {
   throw new Error("Root element not found!");
 }
 
-migrateFromLocalStorage().catch(() => {});
 const root = createRoot(rootElement);
-root.render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+
+async function start() {
+  try {
+    await migrateFromLocalStorage();
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+  } catch (error) {
+    console.error("Failed to migrate notes:", error);
+    root.render(
+      <div role="alert" style={{ padding: 24 }}>
+        <p>无法读取旧笔记，已暂停启动以保护数据。</p>
+        <button type="button" onClick={() => void start()}>
+          重试
+        </button>
+      </div>
+    );
+  }
+}
+
+void start();

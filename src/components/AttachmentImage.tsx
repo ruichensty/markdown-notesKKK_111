@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { idbGetFile } from "@utils/indexedDBStorage";
+import { idbGetFile } from "@/storage/libraryStorage";
 
 interface AttachmentImageProps {
   src: string;

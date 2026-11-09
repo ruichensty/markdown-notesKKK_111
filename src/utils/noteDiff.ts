@@ -17,7 +17,15 @@ export function diffNotes(snapshot: Note[], previousNotes: Note[]): NoteDiff {
     const prev = prevMap.get(note.id);
     if (!prev) {
       added.push(note);
-    } else if (prev.updatedAt !== note.updatedAt) {
+    } else if (
+      prev.updatedAt !== note.updatedAt ||
+      prev.title !== note.title ||
+      prev.content !== note.content ||
+      prev.order !== note.order ||
+      prev.deletedAt !== note.deletedAt ||
+      JSON.stringify(prev.folderIds) !== JSON.stringify(note.folderIds) ||
+      JSON.stringify(prev.attachments) !== JSON.stringify(note.attachments)
+    ) {
       updated.push(note);
     }
   }

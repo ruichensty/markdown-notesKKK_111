@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { diffNotes } from "../noteDiff";
-import type { Note } from "@types";
+import type { Note } from "../../types/note";
 
 function makeNote(id: string, updatedAt: number): Note {
   return {
@@ -65,10 +65,10 @@ describe("diffNotes", () => {
     expect(diff.deleted.map(n => n.id)).toEqual(["old"]);
   });
 
-  it("updatedAt 未变的同名笔记不算更新", () => {
+  it("updatedAt 未变但标题不同仍算更新", () => {
     const snapshot = [makeNote("a", 100)];
     const previous = [{ ...makeNote("a", 100), title: "Renamed" }];
     const diff = diffNotes(snapshot, previous);
-    expect(diff.updated).toEqual([]);
+    expect(diff.updated.map(n => n.id)).toEqual(["a"]);
   });
 });

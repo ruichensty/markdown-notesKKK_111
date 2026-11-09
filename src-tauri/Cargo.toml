@@ -1,0 +1,15 @@
+[package]
+name = "markdown-notes-desktop"
+version = "0.1.0"
+description = "Local-first Markdown Notes desktop application"
+edition = "2021"
+
+[lib]
+name = "markdown_notes_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

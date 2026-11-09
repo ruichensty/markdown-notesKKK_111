@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Note, NoteVersion } from "@types";
-import { idbGetNoteVersions } from "@utils/indexedDBStorage";
+import { idbGetNoteVersions } from "@/storage/libraryStorage";
 import { subscribeCrossTabChange } from "@utils/crossTabSync";
 import { useDialogA11y } from "@hooks";
 import { ConfirmDialog } from "./ConfirmDialog";

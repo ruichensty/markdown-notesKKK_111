@@ -1,5 +1,8 @@
 import type { Note, Folder, Theme, StorageData, NoteTemplate, AiChat, NoteVersion } from "@types";
 import { NOTE_VERSION_BYTE_LIMIT, selectNoteVersionIdsToPrune } from "@utils/noteVersion";
+import { matchesNoteBaseline, NoteConflictError } from "./noteConflict";
+import type { LibrarySnapshot, StoredFileRecord } from "../storage/contract";
+export type { StoredFileRecord } from "../storage/contract";
 
 const DB_NAME = "markdown-notes-db";
 const DB_VERSION = 4;
@@ -116,6 +119,38 @@ export async function idbGetNote(id: string): Promise<Note | undefined> {
 
 export async function idbSaveNote(note: Note): Promise<void> {
   await tx(STORE_NOTES, "readwrite", s => s.put(note));
+}
+
+export async function idbCompareAndWriteNote(
+  id: string,
+  expected: Note | null,
+  next: Note | null
+): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NOTES, "readwrite");
+    const store = transaction.objectStore(STORE_NOTES);
+    let failure: unknown;
+    const request = store.get(id);
+    request.onsuccess = () => {
+      if (!matchesNoteBaseline(request.result, expected)) {
+        failure = new NoteConflictError(id, "笔记已在其他标签页修改或删除");
+        transaction.abort();
+        return;
+      }
+      try {
+        if (next) store.put(next);
+        else store.delete(id);
+      } catch (error) {
+        failure = error;
+        transaction.abort();
+      }
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(failure ?? transaction.error);
+    transaction.onerror = () => reject(failure ?? transaction.error);
+  });
+  invalidateAllDataCache();
 }
 
 export async function idbDeleteNote(id: string): Promise<void> {
@@ -256,6 +291,7 @@ export async function migrateFromLocalStorage(): Promise<void> {
     localStorage.setItem("idb-migrated", "true");
   } catch (error) {
     console.error("Migration failed:", error);
+    throw error;
   }
 }
 
@@ -275,20 +311,21 @@ export async function loadAllData(): Promise<StorageData> {
   if (allDataCache) return allDataCache;
   if (allDataPromise) return allDataPromise;
 
-  allDataPromise = Promise.all([
-    idbGetAllNotes(),
-    idbGetAllFolders(),
-    idbGetSetting<Theme>("theme"),
-  ]).then(([notes, folders, theme]) => {
-    allDataCache = {
-      notes: notes || [],
-      folders: folders || [],
-      theme: theme || "light",
-    };
-    return allDataCache;
-  });
-
-  return allDataPromise;
+  const pending = Promise.all([idbGetAllNotes(), idbGetAllFolders(), idbGetSetting<Theme>("theme")])
+    .then(([notes, folders, theme]) => {
+      allDataCache = {
+        notes: notes || [],
+        folders: folders || [],
+        theme: theme || "light",
+      };
+      return allDataCache;
+    })
+    .catch(error => {
+      if (allDataPromise === pending) allDataPromise = null;
+      throw error;
+    });
+  allDataPromise = pending;
+  return pending;
 }
 
 export async function idbSaveFile(
@@ -359,16 +396,6 @@ export async function idbDeleteAiChat(id: string): Promise<void> {
   await tx<undefined>(STORE_AI_CHATS, "readwrite", s => s.delete(id));
 }
 
-export interface StoredFileRecord {
-  id: string;
-  noteId: string;
-  data: ArrayBuffer;
-  fileName: string;
-  fileType: string;
-  size: number;
-  createdAt: number;
-}
-
 export async function idbGetAllSettings(): Promise<{ key: string; value: unknown }[]> {
   const rows = await tx<{ key: string; value: unknown }[]>(STORE_SETTINGS, "readonly", s =>
     s.getAll()
@@ -381,15 +408,7 @@ export async function idbGetAllFiles(): Promise<StoredFileRecord[]> {
   return rows || [];
 }
 
-export interface ReplaceAllDataPayload {
-  notes: Note[];
-  folders: Folder[];
-  settings: { key: string; value: unknown }[];
-  templates: NoteTemplate[];
-  aiChats: AiChat[];
-  files: StoredFileRecord[];
-  noteVersions: NoteVersion[];
-}
+export type ReplaceAllDataPayload = LibrarySnapshot;
 
 export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise<void> {
   const db = await openDB();
@@ -441,6 +460,7 @@ export async function idbReplaceAllData(payload: ReplaceAllDataPayload): Promise
       report(versionsStore.clear());
       for (const version of payload.noteVersions) report(versionsStore.put(version));
     } catch (error) {
+      transaction.abort();
       reject(error instanceof Error ? error : new Error(String(error)));
       return;
     }

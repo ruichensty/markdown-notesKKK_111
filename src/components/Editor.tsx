@@ -9,7 +9,7 @@ import React, {
 import type { AiEditorSnapshot, Note } from "@types";
 import { useDebounce, useTypingSound } from "@hooks";
 import { generateId } from "@utils/export";
-import { idbDeleteFile, idbSaveFile } from "@utils/indexedDBStorage";
+import { idbDeleteFile, idbSaveFile } from "@/storage/libraryStorage";
 import { validateDocumentImage } from "@utils/documentImage";
 import { SearchReplace } from "./SearchReplace";
 import { EditorToolbar } from "./EditorToolbar";
@@ -46,6 +46,7 @@ export interface EditorHandle {
   applyContent: (nextContent: string, selectionStart?: number, selectionEnd?: number) => void;
   applySnapshot: (nextTitle: string, nextContent: string) => void;
   flushDraft: () => void;
+  acceptSavedSnapshot: (title: string, content: string) => void;
 }
 
 const FONT_SIZE_MAP: Record<string, number> = {
@@ -215,6 +216,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       }, 0);
     },
     flushDraft,
+    acceptSavedSnapshot: (nextTitle: string, nextContent: string) => {
+      titleRef.current = nextTitle;
+      contentRef.current = nextContent;
+      dirtyRef.current = false;
+      setTitle(nextTitle);
+      setContent(nextContent);
+    },
   }));
 
   useEffect(() => {

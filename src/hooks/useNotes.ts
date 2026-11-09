@@ -8,9 +8,12 @@ import {
   idbPruneNoteVersions,
   idbSaveNoteVersion,
   idbPurgeNotes,
-} from "@utils/indexedDBStorage";
+  idbGetFile,
+  idbSaveFile,
+} from "@/storage/libraryStorage";
 import { invalidateAllDataCache } from "@utils/storage";
 import { diffNotes } from "@utils/noteDiff";
+import { NoteConflictError } from "@utils/noteConflict";
 import { publishCrossTabChange, subscribeCrossTabChange } from "@utils/crossTabSync";
 import {
   createNoteVersion,
@@ -37,11 +40,14 @@ function sleep(ms: number): Promise<void> {
 export function useNotes(selectedFolderId: string | null = null, autoSave = true) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [conflictNoteId, setConflictNoteId] = useState<string | null>(null);
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const prevNotesRef = useRef<Note[]>([]);
   const notesRef = useRef<Note[]>(notes);
+  const pendingDraftRef = useRef(false);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const channelRef = useRef<BroadcastChannel | null>(null);
   const sourceIdRef = useRef(generateId());
@@ -49,7 +55,10 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
   const lastVersionAtRef = useRef(new Map<string, number | null>());
   const [versionSaveError, setVersionSaveError] = useState<Error | null>(null);
   const versionRetryRef = useRef<(() => Promise<void>) | null>(null);
-  const markPending = useCallback(() => setSaveStatus("dirty"), []);
+  const markPending = useCallback(() => {
+    pendingDraftRef.current = true;
+    setSaveStatus("dirty");
+  }, []);
 
   const saveNoteVersion = useCallback(
     async (
@@ -89,12 +98,32 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
   const reloadNotes = useCallback(async (preferredNoteId?: string | null) => {
     invalidateAllDataCache();
     const data = await loadNotes();
-    setNotes(data);
-    prevNotesRef.current = data;
+    const { added, updated, deleted } = diffNotes(notesRef.current, prevNotesRef.current);
+    const local = new Map([...added, ...updated].map(note => [note.id, note]));
+    const removed = new Set(deleted.map(note => note.id));
+    const merged = pendingDraftRef.current
+      ? [
+          ...data.filter(note => !removed.has(note.id)).map(note => local.get(note.id) ?? note),
+          ...[...added, ...updated].filter(note => !data.some(remote => remote.id === note.id)),
+        ]
+      : data;
+    notesRef.current = merged;
+    setNotes(merged);
+    if (pendingDraftRef.current) {
+      const oldBaseline = new Map(prevNotesRef.current.map(note => [note.id, note]));
+      prevNotesRef.current = [
+        ...data.map(note =>
+          local.has(note.id) || removed.has(note.id) ? (oldBaseline.get(note.id) ?? note) : note
+        ),
+        ...deleted.filter(note => !data.some(remote => remote.id === note.id)),
+      ];
+    } else {
+      prevNotesRef.current = data;
+    }
 
     const targetId = preferredNoteId ?? currentNoteIdRef.current;
-    if (targetId && data.some(note => note.id === targetId)) return;
-    setCurrentNoteId(data.length > 0 ? data[0].id : null);
+    if (targetId && merged.some(note => note.id === targetId)) return;
+    setCurrentNoteId(merged.length > 0 ? merged[0].id : null);
   }, []);
 
   const broadcastNotesChanged = useCallback((noteId?: string) => {
@@ -107,10 +136,11 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
   }, []);
 
   const persistChanges = useCallback(
-    async (snapshot: Note[], previousNotes: Note[], isRetry = false): Promise<boolean> => {
-      const { added, updated, deleted } = diffNotes(snapshot, previousNotes);
+    async (snapshot: Note[], isRetry = false): Promise<boolean> => {
+      const initial = diffNotes(snapshot, prevNotesRef.current);
 
-      if (added.length === 0 && updated.length === 0 && deleted.length === 0) return false;
+      if (initial.added.length + initial.updated.length + initial.deleted.length === 0)
+        return false;
 
       let statusTimer = 0;
       if (isRetry) {
@@ -122,11 +152,27 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
       try {
         for (let attempt = 0; attempt <= SAVE_RETRY_DELAYS_MS.length; attempt += 1) {
           try {
-            for (const note of added) await saveSingleNote(note);
+            const previousNotes = prevNotesRef.current;
+            const { added, updated, deleted } = diffNotes(snapshot, previousNotes);
+            for (const note of added) {
+              if (await loadSingleNote(note.id)) {
+                throw new NoteConflictError(note.id, `笔记「${note.title}」已在其他标签页创建`);
+              }
+              await saveSingleNote(note, null);
+              prevNotesRef.current = [...prevNotesRef.current, note];
+            }
             for (const note of updated) {
               const latest = await loadSingleNote(note.id);
-              if (!latest) continue;
-              if (latest.updatedAt > note.updatedAt) continue;
+              const baseline = previousNotes.find(previous => previous.id === note.id);
+              if (
+                !latest ||
+                !baseline ||
+                latest.updatedAt !== baseline.updatedAt ||
+                latest.title !== baseline.title ||
+                latest.content !== baseline.content
+              ) {
+                throw new NoteConflictError(note.id, `笔记「${note.title}」已在其他标签页修改`);
+              }
               try {
                 await captureAutoVersion(latest, note);
               } catch (versionError) {
@@ -136,16 +182,37 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
                 setVersionSaveError(error);
                 versionRetryRef.current = () => saveNoteVersion(latest, "auto");
               }
-              await saveSingleNote(note);
+              await saveSingleNote(note, baseline);
+              prevNotesRef.current = prevNotesRef.current.map(previous =>
+                previous.id === note.id ? note : previous
+              );
             }
-            for (const note of deleted) await deleteSingleNote(note.id);
+            for (const note of deleted) {
+              const latest = await loadSingleNote(note.id);
+              if (
+                latest &&
+                (latest.updatedAt !== note.updatedAt ||
+                  latest.title !== note.title ||
+                  latest.content !== note.content)
+              ) {
+                throw new NoteConflictError(note.id, `笔记「${note.title}」已在其他标签页修改`);
+              }
+              await deleteSingleNote(note.id, note);
+              prevNotesRef.current = prevNotesRef.current.filter(
+                previous => previous.id !== note.id
+              );
+            }
             prevNotesRef.current = snapshot;
+            const remaining = diffNotes(notesRef.current, snapshot);
+            pendingDraftRef.current =
+              remaining.added.length + remaining.updated.length + remaining.deleted.length > 0;
             broadcastNotesChanged(updated[0]?.id ?? added[0]?.id ?? deleted[0]?.id);
             setSaveError(false);
-            setSaveStatus("saved");
+            setSaveStatus(pendingDraftRef.current ? "dirty" : "saved");
             return true;
           } catch (error) {
-            if (attempt === SAVE_RETRY_DELAYS_MS.length) {
+            if (error instanceof NoteConflictError || attempt === SAVE_RETRY_DELAYS_MS.length) {
+              if (error instanceof NoteConflictError) setConflictNoteId(error.noteId);
               console.error("Failed to save notes:", error);
               setSaveError(true);
               setSaveStatus("error");
@@ -170,15 +237,23 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
   }, [currentNoteId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState 发生在 await 之后，非同步
-    reloadNotes()
-      .then(() => {
-        setLoaded(true);
-      })
+    void reloadNotes()
+      .then(() => setLoaded(true))
       .catch(error => {
         console.error("Failed to load notes:", error);
-        setLoaded(true);
+        setLoadError(true);
       });
+  }, [reloadNotes]);
+
+  const retryLoad = useCallback(async () => {
+    setLoadError(false);
+    try {
+      await reloadNotes();
+      setLoaded(true);
+    } catch (error) {
+      console.error("Failed to load notes:", error);
+      setLoadError(true);
+    }
   }, [reloadNotes]);
 
   useEffect(
@@ -239,30 +314,28 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
   }, [notesMap, currentNoteId]);
 
   useEffect(() => {
-    if (!loaded || !autoSave) return;
+    if (!loaded || !autoSave || conflictNoteId) return;
 
     const timeoutId = window.setTimeout(() => {
       const snapshot = notes;
-      const previousNotes = prevNotesRef.current;
       saveQueueRef.current = saveQueueRef.current
         .catch(() => {})
         .then(async () => {
-          await persistChanges(snapshot, previousNotes);
+          await persistChanges(snapshot);
         });
     }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [notes, loaded, autoSave, persistChanges]);
+  }, [notes, loaded, autoSave, conflictNoteId, persistChanges]);
 
   const retrySave = useCallback(() => {
     if (!loaded) return;
 
     const snapshot = notes;
-    const previousNotes = prevNotesRef.current;
     saveQueueRef.current = saveQueueRef.current
       .catch(() => {})
       .then(async () => {
-        await persistChanges(snapshot, previousNotes, true);
+        await persistChanges(snapshot, true);
       });
   }, [loaded, notes, persistChanges]);
 
@@ -271,17 +344,16 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
 
     setSaveStatus("saving");
     const snapshot = notesRef.current;
-    const previousNotes = prevNotesRef.current;
     let saved = false;
     saveQueueRef.current = saveQueueRef.current
       .catch(() => {})
       .then(async () => {
-        saved = await persistChanges(snapshot, previousNotes);
+        saved = await persistChanges(snapshot);
       });
     await saveQueueRef.current;
-    if (!saved) setSaveStatus("saved");
+    if (!saved && !saveError && !pendingDraftRef.current) setSaveStatus("saved");
     return saved;
-  }, [loaded, persistChanges]);
+  }, [loaded, persistChanges, saveError]);
 
   const saveEditorSnapshotNow = useCallback(
     async (snapshot: AiEditorSnapshot): Promise<boolean> => {
@@ -299,18 +371,82 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
         updatedAt: Date.now(),
       };
       const next = notesRef.current.map(note => (note.id === updated.id ? updated : note));
+      pendingDraftRef.current = true;
       notesRef.current = next;
       setNotes(next);
       let saved = false;
       saveQueueRef.current = saveQueueRef.current
         .catch(() => {})
         .then(async () => {
-          saved = await persistChanges(next, prevNotesRef.current);
+          saved = await persistChanges(next);
         });
       await saveQueueRef.current;
       return saved;
     },
     [loaded, persistChanges, saveNow]
+  );
+
+  const resolveConflict = useCallback(
+    async (keepCopy: boolean, draft?: AiEditorSnapshot): Promise<Note | null> => {
+      const id = conflictNoteId;
+      if (!id) return null;
+      await saveQueueRef.current.catch(() => {});
+      const remote = await loadSingleNote(id);
+      const local = notesRef.current.find(note => note.id === id);
+      let copy: Note | null = null;
+      if (keepCopy && local) {
+        copy = {
+          ...local,
+          id: generateId(),
+          title: `${draft?.noteId === id ? draft.title : local.title}（冲突副本）`,
+          content: draft?.noteId === id ? draft.content : local.content,
+          deletedAt: undefined,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const files = new Set([
+          ...(copy.attachments ?? []).map(file => file.id),
+          ...Array.from(copy.content.matchAll(/attachment:\/\/([\w-]+)/g), match => match[1]),
+        ]);
+        const remapped = new Map<string, string>();
+        for (const fileId of files) {
+          const file = await idbGetFile(fileId);
+          if (!file) throw new Error("副本附件不存在，请先导出本地正文");
+          const newId = generateId();
+          await idbSaveFile(newId, copy.id, file.data, file.fileName, file.fileType);
+          remapped.set(fileId, newId);
+        }
+        copy.content = copy.content.replace(
+          /attachment:\/\/([\w-]+)/g,
+          (reference, fileId: string) =>
+            remapped.has(fileId) ? `attachment://${remapped.get(fileId)}` : reference
+        );
+        copy.attachments = copy.attachments?.map(file => ({
+          ...file,
+          id: remapped.get(file.id) ?? file.id,
+        }));
+        await saveSingleNote(copy, null);
+      }
+      const next = notesRef.current.filter(note => note.id !== id);
+      if (remote) next.push(remote);
+      if (copy) next.unshift(copy);
+      prevNotesRef.current = prevNotesRef.current.filter(note => note.id !== id);
+      if (remote) prevNotesRef.current.push(remote);
+      if (copy) prevNotesRef.current.push(copy);
+      notesRef.current = next;
+      setNotes(next);
+      const remaining = diffNotes(next, prevNotesRef.current);
+      pendingDraftRef.current =
+        remaining.updated.length + remaining.added.length + remaining.deleted.length > 0;
+      setSaveError(false);
+      setSaveStatus(pendingDraftRef.current ? "dirty" : "saved");
+      setConflictNoteId(null);
+      if (currentNoteIdRef.current === id)
+        setCurrentNoteId(copy?.id ?? remote?.id ?? next[0]?.id ?? null);
+      broadcastNotesChanged(id);
+      return copy ?? remote ?? null;
+    },
+    [broadcastNotesChanged, conflictNoteId]
   );
 
   const createNote = useCallback(
@@ -498,6 +634,10 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
     reorderNotesInFolder,
     getFormattedDate,
     loaded,
+    loadError,
+    conflictNoteId,
+    resolveConflict,
+    retryLoad,
     saveError,
     saveStatus,
     clearSaveError: useCallback(() => setSaveError(false), []),

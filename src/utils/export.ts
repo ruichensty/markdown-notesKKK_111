@@ -3,7 +3,7 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import type { Tokens, TokenizerAndRendererExtension } from "marked";
 import type { Note } from "@types";
-import { idbGetFile } from "./indexedDBStorage";
+import { idbGetFile } from "../storage/libraryStorage";
 
 marked.use({ async: false });
 

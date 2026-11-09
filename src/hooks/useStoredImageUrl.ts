@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { idbGetFile } from "@utils/indexedDBStorage";
+import { idbGetFile } from "@/storage/libraryStorage";
 
 export function useStoredImageUrl(fileId: string | null): {
   url: string | null;

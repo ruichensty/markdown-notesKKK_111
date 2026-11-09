@@ -86,6 +86,21 @@ export function useDebouncedPersistence<T>(
     };
   }, [persist]);
 
+  useEffect(() => {
+    const flushPending = () => {
+      if (timerRef.current) void persist(false, true);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flushPending();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", flushPending);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", flushPending);
+    };
+  }, [persist]);
+
   const retry = useCallback(() => {
     void persist(true, true);
   }, [persist]);

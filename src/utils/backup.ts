@@ -9,8 +9,9 @@ import {
   idbGetAllNoteVersions,
   idbReplaceAllData,
   type StoredFileRecord,
-} from "./indexedDBStorage";
+} from "../storage/libraryStorage";
 import { publishCrossTabChange, type CrossTabDataDomain } from "./crossTabSync";
+import { BACKUP_LIMITS, validateBackupData } from "./backupValidation";
 
 const BACKUP_FORMAT = "markdown-notes-backup";
 const BACKUP_VERSION = 2;
@@ -291,46 +292,14 @@ export async function createBackup(password?: string): Promise<BackupResult> {
 }
 
 export function validateBackup(raw: unknown): BackupFile {
-  if (typeof raw !== "object" || raw === null) {
-    throw new Error("文件格式不正确，不是有效的备份文件");
-  }
-  const candidate = raw as Partial<BackupFile>;
-  if (candidate.format !== BACKUP_FORMAT) {
-    throw new Error("文件格式不正确：缺少 markdown-notes-backup 标识");
-  }
-  if (typeof candidate.version !== "number") {
-    throw new Error("备份文件缺少版本号，可能已损坏");
-  }
-  if (candidate.version > BACKUP_VERSION) {
-    throw new Error(
-      `备份来自更新版本的应用（v${candidate.version}），当前版本（v${BACKUP_VERSION}）可能无法兼容，请先升级应用`
-    );
-  }
-  const data = candidate.data;
-  if (typeof data !== "object" || data === null) {
-    throw new Error("备份文件缺少数据内容，可能已损坏");
-  }
-  for (const field of ["notes", "folders", "settings", "templates", "aiChats", "files"] as const) {
-    if (!Array.isArray(data[field])) {
-      throw new Error(`备份文件缺少「${field}」数据，可能已损坏`);
-    }
-  }
-  if (candidate.version >= 2 && !Array.isArray(data.noteVersions)) {
-    throw new Error("备份文件缺少「noteVersions」数据，可能已损坏");
-  }
-  if (!Array.isArray(data.noteVersions)) data.noteVersions = [];
-  for (const file of data.files) {
-    if (typeof file.dataBase64 !== "string") {
-      throw new Error("备份中的附件数据损坏，无法恢复");
-    }
-  }
-  return candidate as BackupFile;
+  return validateBackupData(raw);
 }
 
 async function readBackupFile(
   file: File,
   password?: string
 ): Promise<{ backup: BackupFile; encrypted: boolean }> {
+  if (file.size > BACKUP_LIMITS.fileBytes) throw new Error("备份文件不能超过 256 MB");
   let raw: unknown;
   try {
     raw = JSON.parse(await file.text());
@@ -369,15 +338,18 @@ export async function inspectBackup(file: File, password?: string): Promise<Back
 export async function restoreBackup(file: File, password?: string): Promise<void> {
   const { backup } = await readBackupFile(file, password);
 
-  const files: StoredFileRecord[] = backup.data.files.map(f => ({
-    id: f.id,
-    noteId: f.noteId,
-    fileName: f.fileName,
-    fileType: f.fileType,
-    data: base64ToArrayBuffer(f.dataBase64),
-    size: 0,
-    createdAt: backup.exportedAt,
-  }));
+  const files: StoredFileRecord[] = backup.data.files.map(f => {
+    const data = base64ToArrayBuffer(f.dataBase64);
+    return {
+      id: f.id,
+      noteId: f.noteId,
+      fileName: f.fileName,
+      fileType: f.fileType,
+      data,
+      size: data.byteLength,
+      createdAt: backup.exportedAt,
+    };
+  });
 
   await idbReplaceAllData({
     notes: backup.data.notes,

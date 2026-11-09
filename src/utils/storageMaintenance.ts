@@ -5,7 +5,7 @@ import {
   idbGetAllNotes,
   idbGetSetting,
   type StoredFileRecord,
-} from "./indexedDBStorage";
+} from "../storage/libraryStorage";
 
 export const ORPHAN_FILE_MIN_AGE_MS = 60 * 60 * 1000;
 
