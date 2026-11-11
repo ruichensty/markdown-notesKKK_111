@@ -7,6 +7,7 @@ import { getVoicesAsync, isSpeechSupported } from "@utils/speech";
 import {
   BackupPasswordRequiredError,
   createBackup,
+  getBackupInventory,
   inspectBackup,
   restoreBackup,
   type BackupInspection,
@@ -16,6 +17,7 @@ import { validateAvatarImage } from "@utils/avatarImage";
 import { createAiUiThemeTemplateBlob, readAiUiThemeFile } from "@utils/aiUiTheme";
 import { idbUpdateSettingsAndAvatarFile } from "@/storage/libraryStorage";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useBackupReminder } from "@hooks/useBackupReminder";
 import { TemplateManagement } from "./TemplateManagement";
 import { ACCENT_PRESETS } from "../constants/accents";
 import { FONT_FAMILY_PRESETS } from "../constants/fonts";
@@ -93,6 +95,13 @@ function SettingsPanelBase({
   const [quickPromptLabel, setQuickPromptLabel] = useState("");
   const [quickPromptText, setQuickPromptText] = useState("");
   const [backupBusy, setBackupBusy] = useState(false);
+  const backupLifecycle = useBackupReminder();
+  const [exportAwaitingConfirmation, setExportAwaitingConfirmation] = useState(false);
+  const [rollbackReady, setRollbackReady] = useState(false);
+  const [currentInventory, setCurrentInventory] = useState<Awaited<
+    ReturnType<typeof getBackupInventory>
+  > | null>(null);
+  const backupLock = useRef(false);
   const [backupMessage, setBackupMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(
     null
   );
@@ -116,7 +125,10 @@ function SettingsPanelBase({
   const backupInputRef = useRef<HTMLInputElement>(null);
   const avatarImageInputRef = useRef<HTMLInputElement>(null);
   const aiUiThemeInputRef = useRef<HTMLInputElement>(null);
-  const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
+  const close = () => {
+    if (!backupLock.current) onClose();
+  };
+  const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose: close });
 
   const [prevOpen, setPrevOpen] = useState(isOpen);
   if (isOpen !== prevOpen) {
@@ -176,26 +188,32 @@ function SettingsPanelBase({
     const link = document.createElement("a");
     link.href = url;
     link.download = result.filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      document.body.appendChild(link);
+      link.click();
+    } finally {
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
   };
 
   const handleExportBackup = async () => {
-    if (backupBusy) return;
+    if (backupLock.current) return;
+    backupLock.current = true;
     setBackupBusy(true);
     setBackupMessage(null);
     try {
+      await onBeforeDataReplace?.();
       const result = await createBackup(backupPassword || undefined);
       const sizeLabel =
         result.byteSize > 1024 * 1024
           ? `${(result.byteSize / 1024 / 1024).toFixed(1)} MB`
           : `${Math.max(1, Math.round(result.byteSize / 1024))} KB`;
       downloadBackup(result);
+      setExportAwaitingConfirmation(true);
       setBackupMessage({
         kind: "ok",
-        text: `已导出${result.encrypted ? "加密" : ""}备份：${result.noteCount} 篇笔记、${result.fileCount} 个附件（${sizeLabel}）`,
+        text: `已发起下载${result.encrypted ? "加密" : ""}备份：${result.noteCount} 篇笔记、${result.fileCount} 个附件（${sizeLabel}）。请检查下载文件后确认。`,
       });
     } catch (error) {
       setBackupMessage({
@@ -203,17 +221,22 @@ function SettingsPanelBase({
         text: `导出失败：${error instanceof Error ? error.message : String(error)}`,
       });
     } finally {
+      backupLock.current = false;
       setBackupBusy(false);
     }
   };
 
   const inspectPendingBackup = async (file = pendingBackupFile) => {
-    if (!file || backupBusy) return;
+    if (!file || backupLock.current) return;
+    backupLock.current = true;
+    setRollbackReady(false);
     setBackupBusy(true);
     setBackupMessage(null);
     setPendingBackupInspection(null);
     try {
       const inspection = await inspectBackup(file, backupPassword || undefined);
+      const inventory = await getBackupInventory();
+      setCurrentInventory(inventory);
       setPendingBackupInspection(inspection);
       setInspectedBackupPassword(inspection.encrypted ? backupPassword : "");
       setShowBackupConfirm(true);
@@ -227,17 +250,26 @@ function SettingsPanelBase({
         });
       }
     } finally {
+      backupLock.current = false;
       setBackupBusy(false);
     }
   };
 
   const handleImportBackup = async () => {
-    if (!pendingBackupFile || !pendingBackupInspection || backupBusy) return;
+    if (!pendingBackupFile || !pendingBackupInspection || backupLock.current) return;
+    backupLock.current = true;
     setBackupBusy(true);
     try {
       await onBeforeDataReplace?.();
-      const recovery = await createBackup(inspectedBackupPassword || backupPassword || undefined);
-      downloadBackup(recovery);
+      if (!rollbackReady) {
+        const recovery = await createBackup(inspectedBackupPassword || backupPassword || undefined);
+        downloadBackup({
+          ...recovery,
+          filename: recovery.filename.replace("backup-", "rollback-"),
+        });
+        setRollbackReady(true);
+        return;
+      }
       await restoreBackup(pendingBackupFile, inspectedBackupPassword || undefined);
       window.location.reload();
     } catch (error) {
@@ -248,6 +280,9 @@ function SettingsPanelBase({
       setShowBackupConfirm(false);
       setPendingBackupInspection(null);
       setInspectedBackupPassword("");
+      setBackupBusy(false);
+    } finally {
+      backupLock.current = false;
       setBackupBusy(false);
     }
   };
@@ -353,7 +388,7 @@ function SettingsPanelBase({
 
   return (
     <div className="fixed inset-0 z-[11000]">
-      <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/30" onClick={close} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -391,7 +426,8 @@ function SettingsPanelBase({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
+            disabled={backupBusy}
             aria-label="关闭设置"
             className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted/80 transition-colors text-muted-foreground hover:text-foreground"
           >
@@ -1435,6 +1471,55 @@ function SettingsPanelBase({
                   }}
                 />
               </div>
+              <div className="settings-backup-summary">
+                <p>
+                  最近确认备份：
+                  {backupLifecycle.confirmedAt
+                    ? new Date(backupLifecycle.confirmedAt).toLocaleString("zh-CN")
+                    : "尚未确认导出备份"}
+                </p>
+                <label>
+                  备份提醒周期
+                  <select
+                    value={backupLifecycle.interval}
+                    disabled={backupBusy}
+                    onChange={event => {
+                      try {
+                        backupLifecycle.setIntervalDays(Number(event.target.value));
+                      } catch {
+                        setBackupMessage({
+                          kind: "error",
+                          text: "无法保存提醒设置，请检查浏览器本地存储权限",
+                        });
+                      }
+                    }}
+                  >
+                    <option value={0}>关闭</option>
+                    <option value={1}>每天</option>
+                    <option value={7}>每 7 天</option>
+                    <option value={30}>每 30 天</option>
+                  </select>
+                </label>
+                <p>提醒仅在打开应用时显示；记录属于当前浏览器，不随备份迁移。</p>
+                {exportAwaitingConfirmation && (
+                  <button
+                    disabled={backupBusy}
+                    onClick={() => {
+                      try {
+                        backupLifecycle.confirmExport();
+                        setExportAwaitingConfirmation(false);
+                      } catch {
+                        setBackupMessage({
+                          kind: "error",
+                          text: "文件下载已发起，但备份时间记录失败",
+                        });
+                      }
+                    }}
+                  >
+                    确认备份文件已保存
+                  </button>
+                )}
+              </div>
               {pendingBackupFile && !pendingBackupInspection && (
                 <button
                   type="button"
@@ -1447,6 +1532,18 @@ function SettingsPanelBase({
               )}
               {pendingBackupInspection && (
                 <div className="settings-backup-summary" role="status">
+                  <p>
+                    覆盖导入会替换全部笔记（含回收站）、文件夹、附件、历史版本、模板、AI
+                    会话及应用设置，不会合并。
+                  </p>
+                  {currentInventory && (
+                    <p>
+                      当前：{currentInventory.noteCount} 篇笔记、{currentInventory.folderCount}{" "}
+                      个文件夹、{currentInventory.fileCount} 个附件、{currentInventory.versionCount}{" "}
+                      个历史版本、{currentInventory.templateCount} 个模板、
+                      {currentInventory.aiChatCount} 个 AI 会话。
+                    </p>
+                  )}
                   <div>
                     <strong>{pendingBackupInspection.encrypted ? "加密备份" : "普通备份"}</strong>
                     <span>
@@ -1483,12 +1580,20 @@ function SettingsPanelBase({
       </div>
       {showBackupConfirm && pendingBackupFile && (
         <ConfirmDialog
-          message={`将用「${pendingBackupFile.name}」中的 ${pendingBackupInspection?.noteCount ?? 0} 篇笔记、${pendingBackupInspection?.fileCount ?? 0} 个附件覆盖当前数据。导入前会自动下载当前数据的回滚备份，确定继续吗？`}
-          confirmLabel="覆盖导入"
+          message={
+            rollbackReady
+              ? `请确认当前数据的 rollback 回滚备份文件已保存。继续后，将用「${pendingBackupFile.name}」替换全部笔记、附件、历史、模板、AI 会话和应用设置，不会合并。`
+              : `当前 ${currentInventory?.noteCount ?? 0} 篇笔记、${currentInventory?.fileCount ?? 0} 个附件，将被「${pendingBackupFile.name}」中的 ${pendingBackupInspection?.noteCount ?? 0} 篇笔记、${pendingBackupInspection?.fileCount ?? 0} 个附件替换。请先下载当前数据的回滚备份。`
+          }
+          confirmLabel={
+            backupBusy ? "处理中…" : rollbackReady ? "确认回滚文件已保存，覆盖导入" : "下载回滚备份"
+          }
+          busy={backupBusy}
           cancelLabel="取消"
           onConfirm={() => void handleImportBackup()}
           onCancel={() => {
             setShowBackupConfirm(false);
+            setRollbackReady(false);
             setPendingBackupFile(null);
             setPendingBackupInspection(null);
             setInspectedBackupPassword("");

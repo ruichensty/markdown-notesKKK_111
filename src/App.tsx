@@ -56,6 +56,7 @@ import {
 import { cleanupOrphanedFiles } from "@utils/storageMaintenance";
 import { useDesktopClose } from "@hooks/useDesktopClose";
 import { useUnsavedChangesGuard } from "@hooks/useUnsavedChangesGuard";
+import { useBackupReminder } from "@hooks/useBackupReminder";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
@@ -138,6 +139,7 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [viewMode, setViewMode] = useState<ViewMode>("home");
   const [showSettings, setShowSettings] = useState(false);
+  const backupReminder = useBackupReminder();
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -339,10 +341,12 @@ function AppContent() {
   const [aiUndoPreview, setAiUndoPreview] = useState<AiNoteApplyPreview | null>(null);
 
   const handleBeforeDataReplace = useCallback(async () => {
+    if (conflictNoteId) throw new Error("请先解决笔记冲突，再备份或导入");
     editorRef.current?.flushDraft();
     await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
-    await Promise.all([saveNow(), flushSettings(), flushFolders()]);
-  }, [flushFolders, flushSettings, saveNow]);
+    const results = await Promise.all([saveNow(), flushSettings(), flushFolders()]);
+    if (!results[1] || !results[2]) throw new Error("设置或文件夹尚未保存，请重试后再备份或导入");
+  }, [flushFolders, flushSettings, saveNow, conflictNoteId]);
 
   useDesktopClose(
     async () => {
@@ -1109,6 +1113,28 @@ function AppContent() {
               将本地内容另存为副本
             </button>
           </div>
+        </div>
+      )}
+      {backupReminder.due && (
+        <div
+          role="status"
+          className="fixed top-3 left-1/2 z-[16000] -translate-x-1/2 rounded-xl border border-border bg-card p-3 shadow-lg text-sm"
+        >
+          <p>距离上次确认备份已超过 {backupReminder.interval} 天，建议导出一份备份。</p>
+          <button onClick={() => setShowSettings(true)} className="mr-3 text-primary">
+            打开备份设置
+          </button>
+          <button
+            onClick={() => {
+              try {
+                backupReminder.snooze();
+              } catch {
+                setShowSettings(true);
+              }
+            }}
+          >
+            明天提醒
+          </button>
         </div>
       )}
       <div className="app-shell h-screen w-screen flex bg-background text-foreground relative overflow-hidden">

@@ -82,6 +82,25 @@ export interface BackupInspection {
   versionCount: number;
 }
 
+export async function getBackupInventory() {
+  const [notes, folders, files, versions, templates, chats] = await Promise.all([
+    idbGetAllNotes(),
+    idbGetAllFolders(),
+    idbGetAllFiles(),
+    idbGetAllNoteVersions(),
+    idbGetAllTemplates(),
+    idbGetAllAiChats(),
+  ]);
+  return {
+    noteCount: notes.length,
+    folderCount: folders.length,
+    fileCount: files.length,
+    versionCount: versions.length,
+    templateCount: templates.length,
+    aiChatCount: chats.length,
+  };
+}
+
 export class BackupPasswordRequiredError extends Error {
   constructor() {
     super("此备份已加密，请输入密码后继续");
