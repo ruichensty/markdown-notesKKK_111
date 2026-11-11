@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import type { Note } from "@types";
 import { useDialogA11y } from "@hooks";
 
@@ -6,7 +6,7 @@ interface TrashViewProps {
   open: boolean;
   onClose: () => void;
   notes: Note[];
-  onRestore: (id: string) => void;
+  onRestore: (id: string) => void | Promise<void>;
   onPurge: (id: string) => void | Promise<void>;
   onEmptyTrash: () => void | Promise<void>;
 }
@@ -23,11 +23,36 @@ function relDeleteTime(ts: number): string {
 }
 
 function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: TrashViewProps) {
-  const [rendered, setRendered] = useState(false);
+  const [rendered, setRendered] = useState(open);
   const [visible, setVisible] = useState(false);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
-  const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose });
+  const restoreLock = useRef(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreFailure, setRestoreFailure] = useState<{ id: string; message: string } | null>(
+    null
+  );
+  const close = () => {
+    if (!restoreLock.current) onClose();
+  };
+  const { dialogRef, titleId } = useDialogA11y({ open: rendered, onClose: close });
+  const restore = async (id: string) => {
+    if (restoreLock.current) return;
+    restoreLock.current = true;
+    setRestoringId(id);
+    setRestoreFailure(null);
+    try {
+      await onRestore(id);
+    } catch (reason) {
+      setRestoreFailure({
+        id,
+        message: reason instanceof Error ? reason.message : "恢复失败，请重试",
+      });
+    } finally {
+      restoreLock.current = false;
+      setRestoringId(null);
+    }
+  };
 
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
@@ -63,7 +88,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
         backdropFilter: visible ? "blur(4px)" : "none",
         transition: "background-color 0.2s ease, backdrop-filter 0.2s ease",
       }}
-      onClick={onClose}
+      onClick={close}
       onTransitionEnd={handleTransitionEnd}
     >
       <div
@@ -107,7 +132,8 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
+            disabled={restoringId !== null}
             className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
             aria-label="关闭"
           >
@@ -123,7 +149,15 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {restoreFailure && (
+          <div role="alert" className="px-5 py-3 text-sm text-destructive">
+            <p>{restoreFailure.message}</p>
+            <button disabled={restoringId !== null} onClick={() => void restore(restoreFailure.id)}>
+              重试恢复保存
+            </button>
+          </div>
+        )}
+        <div className="flex-1 overflow-y-auto scrollbar-thin" aria-busy={restoringId !== null}>
           {notes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
               <svg
@@ -164,7 +198,8 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => onRestore(note.id)}
+                      onClick={() => void restore(note.id)}
+                      disabled={restoringId !== null}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                       title="恢复"
                     >
@@ -181,10 +216,11 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
                           d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
                         />
                       </svg>
-                      恢复
+                      {restoringId === note.id ? "恢复中…" : "恢复"}
                     </button>
                     <button
                       onClick={() => setPurgeTarget(note.id)}
+                      disabled={restoringId !== null}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                       title="永久删除"
                     >
@@ -234,6 +270,7 @@ function TrashView({ open, onClose, notes, onRestore, onPurge, onEmptyTrash }: T
             ) : (
               <button
                 onClick={() => setConfirmEmpty(true)}
+                disabled={restoringId !== null}
                 className="px-3.5 py-1.5 rounded-lg text-[11px] font-medium text-destructive border border-destructive/30 hover:bg-destructive/10 transition-colors"
               >
                 清空回收站

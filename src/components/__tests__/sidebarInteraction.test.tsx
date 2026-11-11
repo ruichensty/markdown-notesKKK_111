@@ -18,6 +18,15 @@ function setup() {
 }
 
 describe("sidebar interactions", () => {
+  it("clears selection when search scope changes", () => {
+    setup();
+    fireEvent.click(screen.getByTitle("批量选择"));
+    fireEvent.click(screen.getByRole("button", { name: "全选全部笔记（含折叠文件夹）" }));
+    expect(screen.getByText("1 / 1 已选")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("搜索笔记..."), { target: { value: "其他" } });
+    expect(screen.getByText(/0 \/ 0 已选/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除" })).toBeDisabled();
+  });
   it("confirms note deletion outside the scrolling sidebar and supports cancel", () => {
     const { deleted } = setup();
     fireEvent.click(screen.getByRole("button", { name: "删除笔记「测试笔记」" }));

@@ -55,6 +55,7 @@ import {
 } from "@utils/aiNoteActions";
 import { cleanupOrphanedFiles } from "@utils/storageMaintenance";
 import { useDesktopClose } from "@hooks/useDesktopClose";
+import { useUnsavedChangesGuard } from "@hooks/useUnsavedChangesGuard";
 import { applyAccent } from "./constants/accents";
 import { BUILT_IN_QUICK_PROMPTS } from "./constants/aiPrompts";
 
@@ -180,6 +181,7 @@ function AppContent() {
     retryVersionSave,
     trashedNotes,
     restoreNote,
+    restoreNoteAndSave,
     purgeNote,
     emptyTrash,
   } = useNotes(null, settings.autoSave);
@@ -291,6 +293,13 @@ function AppContent() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EditorHandle>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [searchRequest, setSearchRequest] = useState<{
+    noteId: string;
+    query: string;
+    token: number;
+  } | null>(null);
+  const searchTokenRef = useRef(0);
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const handleResolveConflict = useCallback(
     async (keepCopy: boolean) => {
@@ -310,6 +319,23 @@ function AppContent() {
     [conflictNoteId, handleStorageError, resolveConflict]
   );
   const currentNoteRef = useRef<Note | null>(null);
+  useUnsavedChangesGuard(() => {
+    if (
+      saveStatus !== "saved" ||
+      saveError ||
+      conflictNoteId ||
+      settingsSaveError ||
+      folderSaveError
+    )
+      return true;
+    const draft = editorRef.current?.getSnapshot();
+    return Boolean(
+      draft &&
+      currentNote &&
+      draft.noteId === currentNote.id &&
+      (draft.title !== currentNote.title || draft.content !== currentNote.content)
+    );
+  });
   const [aiUndoPreview, setAiUndoPreview] = useState<AiNoteApplyPreview | null>(null);
 
   const handleBeforeDataReplace = useCallback(async () => {
@@ -379,11 +405,17 @@ function AppContent() {
         { id: current.noteId, title: current.title, content: current.content },
         "restore"
       );
+      if (editorRef.current && editorRef.current.getSnapshot().noteId !== current.noteId) {
+        throw new Error("当前笔记已切换，恢复操作已停止");
+      }
       editorRef.current?.applySnapshot(version.title, version.content);
-      updateNote(current.noteId, { title: version.title, content: version.content });
+      await saveEditorSnapshotNow({ ...current, title: version.title, content: version.content });
+      if (editorRef.current?.getSnapshot().noteId === current.noteId) {
+        editorRef.current.acceptSavedSnapshot(version.title, version.content);
+      }
       showToast("历史版本已恢复，恢复前内容也已保存", "success");
     },
-    [getAiEditorSnapshot, saveNoteVersion, showToast, updateNote]
+    [getAiEditorSnapshot, saveNoteVersion, saveEditorSnapshotNow, showToast]
   );
 
   const getAiNoteContext = useCallback(
@@ -592,9 +624,10 @@ function AppContent() {
   }, [setCurrentNoteId, settings.homeLayout]);
 
   const handleOpenInEditor = useCallback(
-    (id: string) => {
+    (id: string, query?: string) => {
       handleNoteSelect(id);
       setViewMode(isMobile ? "editor" : "split");
+      setSearchRequest(query ? { noteId: id, query, token: ++searchTokenRef.current } : null);
     },
     [handleNoteSelect, isMobile]
   );
@@ -628,11 +661,21 @@ function AppContent() {
   }, []);
 
   const handleRestoreFromTrash = useCallback(
-    (id: string) => {
-      restoreNote(id);
-      showToast("笔记已恢复", "success");
+    async (id: string) => {
+      try {
+        await restoreNoteAndSave(id);
+        handleNoteSelect(id);
+        setShowTrash(false);
+        showToast("笔记已恢复并保存", "success");
+      } catch (error) {
+        showToast(
+          `恢复保存失败：${error instanceof Error ? error.message : "请重试保存"}。本地内容已保留，请使用保存重试。`,
+          "error"
+        );
+        throw error;
+      }
     },
-    [restoreNote, showToast]
+    [restoreNoteAndSave, handleNoteSelect, showToast]
   );
 
   const handlePurgeFromTrash = useCallback(
@@ -1173,6 +1216,8 @@ function AppContent() {
                       note={currentNote}
                       onUpdate={handleNoteUpdate}
                       onSave={handleEditorSave}
+                      onDraftStateChange={setEditorDirty}
+                      searchRequest={searchRequest}
                       fontSize={settings.fontSize}
                       lineHeight={settings.lineHeight}
                       fontFamily={settings.fontFamily}
@@ -1219,7 +1264,11 @@ function AppContent() {
           <StatusBar
             allNotes={allNotes}
             currentNote={currentNote}
-            saveStatus={saveStatus}
+            saveStatus={
+              editorDirty && saveStatus !== "error" && saveStatus !== "retrying"
+                ? "dirty"
+                : saveStatus
+            }
             onRetrySave={retrySave}
           />
         </div>

@@ -14,11 +14,14 @@ import { validateDocumentImage } from "@utils/documentImage";
 import { SearchReplace } from "./SearchReplace";
 import { EditorToolbar } from "./EditorToolbar";
 import { getFontStack } from "../constants/fonts";
+import { useEditorPosition } from "@hooks/useEditorPosition";
 
 interface EditorProps {
   note: Note;
   onUpdate: (id: string, data: { title?: string; content?: string }) => void;
   onSave?: () => void;
+  onDraftStateChange?: (dirty: boolean) => void;
+  searchRequest?: { noteId: string; query: string; token: number } | null;
   fontSize?: "sm" | "md" | "lg" | number;
   lineHeight?: number;
   fontFamily?: "sans" | "serif" | "mono";
@@ -90,6 +93,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     note,
     onUpdate,
     onSave,
+    onDraftStateChange,
+    searchRequest,
     fontSize = "md",
     lineHeight = 1.7,
     fontFamily = "mono",
@@ -115,6 +120,17 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const contentRef = useRef(content);
   const dirtyRef = useRef(false);
   const onUpdateRef = useRef(onUpdate);
+  const draftStateRef = useRef(onDraftStateChange);
+  useEffect(() => {
+    draftStateRef.current = onDraftStateChange;
+  }, [onDraftStateChange]);
+  const locatedRequestRef = useRef<number | null>(null);
+  const rememberPosition = useEditorPosition(
+    textareaRef,
+    note.id,
+    !switching && content === note.content,
+    Boolean(searchRequest && searchRequest.noteId === note.id)
+  );
   const { playKey, playEnter, playBackspace } = useTypingSound(typingSound);
 
   useEffect(() => {
@@ -124,12 +140,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const setDraftTitle = useCallback((nextTitle: string) => {
     titleRef.current = nextTitle;
     dirtyRef.current = true;
+    draftStateRef.current?.(true);
     setTitle(nextTitle);
   }, []);
 
   const setDraftContent = useCallback((nextContent: string) => {
     contentRef.current = nextContent;
     dirtyRef.current = true;
+    draftStateRef.current?.(true);
     setContent(nextContent);
   }, []);
 
@@ -140,6 +158,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       title: titleRef.current,
       content: contentRef.current,
     });
+    draftStateRef.current?.(false);
   }, []);
 
   useEffect(() => {
@@ -169,6 +188,43 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   }, [flushDraft, note.id, note.title, note.content]);
 
   useEffect(() => () => flushDraft(), [flushDraft]);
+
+  useEffect(() => {
+    if (
+      !searchRequest ||
+      searchRequest.noteId !== note.id ||
+      switching ||
+      content !== note.content ||
+      locatedRequestRef.current === searchRequest.token
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const terms = searchRequest.query
+        .trim()
+        .split(/\s+/)
+        .map(term => term.replace(/^#/, ""))
+        .filter(Boolean);
+      const matches = terms
+        .map(term => {
+          const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return new RegExp(escaped, "iu").exec(content);
+        })
+        .filter((match): match is RegExpExecArray => match !== null)
+        .sort((a, b) => a.index - b.index);
+      const match = matches[0];
+      textarea.focus();
+      textarea.setSelectionRange(match?.index ?? 0, match ? match.index + match[0].length : 0);
+      const line = content.slice(0, match?.index ?? 0).split("\n").length - 1;
+      textarea.scrollTop = Math.max(
+        0,
+        line * (parseFloat(getComputedStyle(textarea).lineHeight) || 20) - textarea.clientHeight / 3
+      );
+      locatedRequestRef.current = searchRequest.token;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [searchRequest, note.id, note.content, switching, content]);
 
   const debouncedTitle = useDebounce(title, 500);
   const debouncedContent = useDebounce(content, 300);
@@ -220,6 +276,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       titleRef.current = nextTitle;
       contentRef.current = nextContent;
       dirtyRef.current = false;
+      draftStateRef.current?.(false);
       setTitle(nextTitle);
       setContent(nextContent);
     },
@@ -667,6 +724,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             ref={textareaRef}
             value={content}
             onChange={handleContentChange}
+            onSelect={rememberPosition}
+            onScroll={rememberPosition}
+            onBlur={rememberPosition}
             onKeyDown={handleKeyDown}
             onKeyUp={scrollToCursorCenter}
             onClick={scrollToCursorCenter}

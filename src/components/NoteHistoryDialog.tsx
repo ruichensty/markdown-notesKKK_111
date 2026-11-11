@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import type { Note, NoteVersion } from "@types";
 import { idbGetNoteVersions } from "@/storage/libraryStorage";
 import { subscribeCrossTabChange } from "@utils/crossTabSync";
@@ -38,15 +38,24 @@ export function NoteHistoryDialog({
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const { dialogRef, titleId } = useDialogA11y({ open, onClose });
+  const restoreLock = useRef(false);
+  const close = () => {
+    if (!restoreLock.current) onClose();
+  };
+  const { dialogRef, titleId } = useDialogA11y({ open, onClose: close });
+  const noteId = note?.id;
 
   useEffect(() => {
-    if (!open || !note) return;
+    if (!open || !noteId) return;
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      idbGetNoteVersions(note.id)
+      setVersions([]);
+      setSelectedId(null);
+      setConfirmRestore(false);
+      setConfirmDelete(false);
+      idbGetNoteVersions(noteId)
         .then(list => {
           if (!active) return;
           setVersions(list);
@@ -63,20 +72,32 @@ export function NoteHistoryDialog({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [note, open]);
+  }, [noteId, open]);
 
   useEffect(() => {
-    if (!open || !note) return;
-    return subscribeCrossTabChange("note-versions", () => {
-      void idbGetNoteVersions(note.id).then(list => {
-        setVersions(list);
-        setConfirmDelete(false);
-        setSelectedId(current =>
-          current && list.some(version => version.id === current) ? current : (list[0]?.id ?? null)
-        );
-      });
+    if (!open || !noteId) return;
+    let active = true;
+    const unsubscribe = subscribeCrossTabChange("note-versions", () => {
+      void idbGetNoteVersions(noteId)
+        .then(list => {
+          if (!active) return;
+          setVersions(list);
+          setConfirmDelete(false);
+          setSelectedId(current =>
+            current && list.some(version => version.id === current)
+              ? current
+              : (list[0]?.id ?? null)
+          );
+        })
+        .catch(reason => {
+          if (active) setError(reason instanceof Error ? reason.message : String(reason));
+        });
     });
-  }, [note, open]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [noteId, open]);
 
   const selected = useMemo(
     () => versions.find(version => version.id === selectedId) ?? null,
@@ -99,7 +120,8 @@ export function NoteHistoryDialog({
   };
 
   const restoreSelected = async () => {
-    if (!selected || restoring) return;
+    if (!selected || restoreLock.current) return;
+    restoreLock.current = true;
     setRestoring(true);
     setError(null);
     try {
@@ -110,6 +132,7 @@ export function NoteHistoryDialog({
       setError(reason instanceof Error ? reason.message : String(reason));
       setConfirmRestore(false);
     } finally {
+      restoreLock.current = false;
       setRestoring(false);
     }
   };
@@ -119,7 +142,7 @@ export function NoteHistoryDialog({
       <button
         type="button"
         className="note-history-backdrop"
-        onClick={onClose}
+        onClick={close}
         aria-label="关闭版本历史"
       />
       <section
@@ -135,7 +158,7 @@ export function NoteHistoryDialog({
             <span className="note-history-kicker">Version history</span>
             <h2 id={titleId}>版本历史 · {note.title || "Untitled"}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭版本历史">
+          <button type="button" onClick={close} disabled={restoring} aria-label="关闭版本历史">
             ×
           </button>
         </header>
@@ -152,6 +175,7 @@ export function NoteHistoryDialog({
                 type="button"
                 className={`note-history-item ${selectedId === version.id ? "note-history-item--active" : ""}`}
                 onClick={() => setSelectedId(version.id)}
+                disabled={restoring}
               >
                 <strong>{new Date(version.createdAt).toLocaleString("zh-CN")}</strong>
                 <span>{SOURCE_LABEL[version.source]}</span>
@@ -183,6 +207,7 @@ export function NoteHistoryDialog({
                   <button
                     type="button"
                     className="note-history-delete"
+                    disabled={restoring}
                     onClick={() => setConfirmDelete(true)}
                   >
                     删除此版本
@@ -209,6 +234,7 @@ export function NoteHistoryDialog({
         <ConfirmDialog
           message="恢复前会先保存当前内容为一个历史版本，然后用所选版本替换当前笔记。确定继续吗？"
           confirmLabel={restoring ? "恢复中…" : "确认恢复"}
+          busy={restoring}
           cancelLabel="取消"
           onConfirm={() => void restoreSelected()}
           onCancel={() => setConfirmRestore(false)}

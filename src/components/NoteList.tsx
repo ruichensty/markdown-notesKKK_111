@@ -20,7 +20,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 interface NoteListProps {
   notes: Note[];
   activeNoteId: string | null;
-  onNoteSelect: (id: string) => void;
+  onNoteSelect: (id: string, query?: string) => void;
   onNewNote: (folderIds?: string[]) => void;
   onNoteDelete: (id: string) => void;
   onRemoveFolderFromNotes?: (folderIds: string[]) => void;
@@ -97,7 +97,19 @@ function NoteList({
   const [searchDateRange, setSearchDateRange] = useState<NoteSearchDateRange>("all");
   const [activeTab, setActiveTab] = useState<SidebarTab>("notes");
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [rawSelectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const scopeKey = JSON.stringify([
+    searchQuery,
+    searchScope,
+    searchDateRange,
+    selectedFolderId,
+    activeTab,
+  ]);
+  const [selectionScope, setSelectionScope] = useState(scopeKey);
+  if (selectionScope !== scopeKey) {
+    setSelectionScope(scopeKey);
+    setSelectedIds(new Set());
+  }
   const [pendingRenameId, setPendingRenameId] = useState<string | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<{
     message: string;
@@ -227,6 +239,15 @@ function NoteList({
     return notes.map(n => n.id);
   }, [searchQuery, isSearchPending, selectedFolder, searchResults, selectedFolderNotes, notes]);
 
+  const selectedIds = useMemo(
+    () => new Set(visibleNoteIds.filter(id => rawSelectedIds.has(id))),
+    [visibleNoteIds, rawSelectedIds]
+  );
+  const selectionLabel = searchQuery.trim()
+    ? "当前搜索结果"
+    : selectedFolder
+      ? "当前文件夹"
+      : "全部笔记（含折叠文件夹）";
   const handleSelectAll = useCallback(() => {
     if (visibleNoteIds.length > 0 && visibleNoteIds.every(id => selectedIds.has(id))) {
       setSelectedIds(new Set());
@@ -509,7 +530,7 @@ function NoteList({
             results={searchResults}
             query={debouncedSearchQuery}
             activeNoteId={activeNoteId}
-            onNoteSelect={onNoteSelect}
+            onNoteSelect={id => onNoteSelect(id, debouncedSearchQuery)}
             onNoteDelete={onNoteDelete}
             selectionMode={selectionMode}
             selectedIds={selectedIds}
@@ -612,9 +633,19 @@ function NoteList({
                 <path d="M5.5 8.5l2 2 4-4" />
               )}
             </svg>
-            <span>全选</span>
+            <span>
+              {visibleNoteIds.length > 0 && visibleNoteIds.every(id => selectedIds.has(id))
+                ? "取消全选"
+                : `全选${selectionLabel}`}
+            </span>
           </button>
-          <span className="batch-action-count">{selectedIds.size} 已选</span>
+          <span
+            className="batch-action-count"
+            aria-live="polite"
+            title="切换搜索或文件夹时会清空选择"
+          >
+            {selectedIds.size} / {visibleNoteIds.length} 已选
+          </span>
           <div className="batch-action-spacer" />
           {onBatchMoveToFolder && folderTree.length > 0 && (
             <button

@@ -34,6 +34,26 @@ import { useNotes } from "../useNotes";
 const base: Note = { id: "1", title: "title", content: "initial", createdAt: 1, updatedAt: 1 };
 
 describe("useNotes persistence", () => {
+  it("keeps restored content after a failed write and saves it on retry", async () => {
+    const deleted = { ...base, deletedAt: 2 };
+    mocks.loadNotes.mockResolvedValue([deleted]);
+    mocks.loadSingleNote.mockResolvedValue(deleted);
+    mocks.saveSingleNote.mockRejectedValue(new Error("disk full"));
+    const { result } = renderHook(() => useNotes(null, false));
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    let failure: unknown;
+    await act(async () => {
+      try { await result.current.restoreNoteAndSave("1"); }
+      catch (error) { failure = error; }
+    });
+    expect(failure).toBeInstanceOf(Error);
+    expect(result.current.saveStatus).toBe("error");
+    expect(result.current.allNotes.find(note => note.id === "1")?.content).toBe(base.content);
+    mocks.saveSingleNote.mockResolvedValue(undefined);
+    await act(async () => { await result.current.saveNow(); });
+    expect(result.current.saveStatus).toBe("saved");
+    expect(mocks.saveSingleNote.mock.lastCall?.[0].deletedAt).toBeUndefined();
+  }, 30000);
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadNotes.mockResolvedValue([base]);
@@ -79,6 +99,25 @@ describe("useNotes persistence", () => {
     });
     expect(mocks.saveSingleNote).toHaveBeenCalledTimes(2);
     expect(mocks.saveSingleNote.mock.calls[1][0].content).toBe("second");
+  });
+
+  it("waits for restored notes to persist even when autosave is disabled", async () => {
+    const deleted = { ...base, deletedAt: 2 };
+    mocks.loadNotes.mockResolvedValue([deleted]);
+    mocks.loadSingleNote.mockResolvedValue(deleted);
+    let release!: () => void;
+    mocks.saveSingleNote.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+    const { result } = renderHook(() => useNotes(null, false));
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    let finished = false;
+    let restoring!: Promise<void>;
+    act(() => { restoring = result.current.restoreNoteAndSave("1").then(() => { finished = true; }); });
+    await waitFor(() => expect(mocks.saveSingleNote).toHaveBeenCalledOnce());
+    expect(finished).toBe(false);
+    expect(mocks.saveSingleNote.mock.calls[0][0].deletedAt).toBeUndefined();
+    await act(async () => { release(); await restoring; });
+    expect(finished).toBe(true);
+    expect(result.current.saveStatus).toBe("saved");
   });
 
   it("preserves a pending draft when another tab updates the same note", async () => {

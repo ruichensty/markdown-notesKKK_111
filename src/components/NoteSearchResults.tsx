@@ -63,7 +63,7 @@ export function NoteSearchResults({
         return (
           <article
             key={note.id}
-            className={`note-search-result ${note.id === activeNoteId ? "note-search-result--active" : ""}`}
+            className={`note-search-result ${note.id === activeNoteId ? "note-search-result--active" : ""} ${selectionMode && selected ? "sidebar-item--selected" : ""}`}
             onContextMenu={event => {
               if (!onContextMenu) return;
               event.preventDefault();
@@ -73,6 +73,13 @@ export function NoteSearchResults({
             <button
               type="button"
               className="note-search-result-main"
+              aria-current={note.id === activeNoteId ? "page" : undefined}
+              aria-pressed={selectionMode ? selected : undefined}
+              aria-label={
+                selectionMode
+                  ? `${selected ? "取消选择" : "选择"}「${note.title || "未命名笔记"}」`
+                  : `打开笔记「${note.title || "未命名笔记"}」`
+              }
               onClick={() => (selectionMode ? onToggleSelect?.(note.id) : onNoteSelect(note.id))}
             >
               <span className="note-search-result-title">
@@ -104,6 +111,7 @@ export function NoteSearchResults({
             <button
               type="button"
               className="note-search-result-delete"
+              hidden={selectionMode}
               onClick={() => onNoteDelete(note.id)}
               aria-label={`删除 ${note.title || "Untitled"}`}
             >

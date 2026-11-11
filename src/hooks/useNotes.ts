@@ -628,6 +628,23 @@ export function useNotes(selectedFolderId: string | null = null, autoSave = true
     updateNote,
     deleteNote,
     restoreNote,
+    restoreNoteAndSave: async (id: string): Promise<void> => {
+      await saveQueueRef.current.catch(() => {});
+      const note = notesRef.current.find(item => item.id === id);
+      if (!note) throw new Error("笔记已不存在，无法恢复");
+      const restored = { ...note, updatedAt: Date.now() };
+      delete restored.deletedAt;
+      const next = notesRef.current.map(item => (item.id === id ? restored : item));
+      notesRef.current = next;
+      pendingDraftRef.current = true;
+      setNotes(next);
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          await persistChanges(next);
+        });
+      await saveQueueRef.current;
+    },
     purgeNote,
     emptyTrash,
     reorderNotes,

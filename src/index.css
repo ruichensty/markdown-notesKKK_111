@@ -3392,6 +3392,10 @@
   -webkit-line-clamp: 2;
 }
 
+.note-search-result-delete[hidden] {
+  display: none;
+}
+
 .note-search-result-delete {
   position: absolute;
   top: 8px;
